@@ -1,0 +1,25 @@
+Scrcpy Device Manager
+Copyright (c) 2026 Scrcpy Device Manager Contributors
+
+This product bundles the following third-party software:
+
+- scrcpy (https://github.com/Genymobile/scrcpy)
+  Copyright (C) 2018 Genymobile
+  Copyright (C) 2018-2026 Romain Vimont
+  Licensed under the Apache License, Version 2.0
+
+- Android SDK Platform Tools (adb)
+  Copyright Google LLC
+  Licensed under the Apache License, Version 2.0
+
+- SDL (Simple DirectMedia Layer) 3
+  Copyright (C) 1997-2024 Sam Lantinga
+  Licensed under the zlib License
+
+- FFmpeg
+  Licensed under the GNU Lesser General Public License (LGPL) v2.1+
+  or the GNU General Public License (GPL) v2+
+
+- dav1d
+  Copyright (C) 2018-2024 VideoLAN and dav1d authors
+  Licensed under the BSD 2-Clause License

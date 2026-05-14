@@ -2,6 +2,8 @@
 
 A unified, menu-driven Python interface for managing Android devices with [scrcpy](https://github.com/Genymobile/scrcpy).
 
+> **Disclaimer:** This is an unofficial community project. `scrcpy` is a trademark of Genymobile. This manager is a separate Python wrapper and does not modify or distribute scrcpy source code. Pre-built scrcpy binaries are downloaded directly from the official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) GitHub releases under the Apache 2.0 License. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
+
 ![Python 3](https://img.shields.io/badge/python-3-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
@@ -466,6 +468,13 @@ scrcpy-manager/
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+This manager (Python code) is licensed under the **MIT License** — see [LICENSE](LICENSE).
+
+Third-party binaries (`scrcpy.exe`, `adb.exe`, SDL3, FFmpeg, dav1d) are downloaded from the official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) releases and are licensed under their respective terms. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) and [NOTICE](NOTICE) for full attribution.
+
+- scrcpy & adb: Apache 2.0 ([licenses/scrcpy-LICENSE](licenses/scrcpy-LICENSE))
+- SDL3: zlib License
+- FFmpeg: LGPL 2.1+ / GPL 2+
+- dav1d: BSD 2-Clause
 
 Copyright (c) 2026 Scrcpy Device Manager Contributors.
