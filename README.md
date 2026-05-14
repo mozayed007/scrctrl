@@ -7,7 +7,7 @@
 
 <pre align="center">
 ╔══════════════════════════════════════════╗
-║            **S C R C T R L**                 ║
+║                S C R C T R L             ║
 ║      Scrcpy Device Manager for Windows   ║
 ╚══════════════════════════════════════════╝
 </pre>
