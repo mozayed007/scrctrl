@@ -256,6 +256,149 @@ class QuickAppScreen(ModalScreen[list[str] | None]):
             self.dismiss(args)
 
 
+class DiscoverListScreen(ModalScreen[tuple[ScrcpyManager, str, str] | None]):
+    """Modal screen to select a discovered wireless device."""
+
+    def __init__(self, manager: ScrcpyManager, items: list[tuple[str, str, str]]) -> None:
+        self.manager = manager
+        self.items = items
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Static("Discovered Devices", classes="dialog-title")
+        table = DataTable(id="discover-table")
+        table.add_columns("#", "Name", "Address", "Source")
+        table.cursor_type = "row"
+        table.zebra_stripes = True
+        for i, (name, ipport, source) in enumerate(self.items, 1):
+            table.add_row(str(i), name, ipport, source)
+        yield table
+        with Horizontal(classes="dialog-buttons"):
+            yield Button("Connect", id="connect", variant="primary")
+            yield Button("Cancel", id="cancel", variant="default")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+        elif event.button.id == "connect":
+            table = self.query_one("#discover-table", DataTable)
+            row = table.cursor_row
+            if row is None or not (0 <= row < len(self.items)):
+                self.app.notify("Select a device to connect.", severity="error")
+                return
+            name, ipport, _source = self.items[row]
+            self.dismiss((self.manager, ipport, name))
+
+
+class InputScreen(ModalScreen[str | None]):
+    """Modal screen for simple text input."""
+
+    def __init__(self, label: str, default: str = "") -> None:
+        self.label = label
+        self.default = default
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Static(self.label, classes="dialog-title")
+        yield Input(value=self.default, id="input_value")
+        with Horizontal(classes="dialog-buttons"):
+            yield Button("Save", id="save", variant="primary")
+            yield Button("Cancel", id="cancel", variant="default")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+        elif event.button.id == "save":
+            value = self.query_one("#input_value", Input).value.strip()
+            if not value:
+                self.app.notify(f"{self.label} is required.", severity="error")
+                return
+            self.dismiss(value)
+
+
+class ProfileListScreen(ModalScreen[None]):
+    """Screen to manage profiles (list, add, edit, delete)."""
+
+    def __init__(self, manager: ScrcpyManager) -> None:
+        self.manager = manager
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Static("Profile Manager", classes="dialog-title")
+        table = DataTable(id="profile-table")
+        table.add_columns("#", "Name", "IP", "Serial", "Quality")
+        table.cursor_type = "row"
+        table.zebra_stripes = True
+        yield table
+        with Horizontal(classes="dialog-buttons"):
+            yield Button("Add", id="add", variant="primary")
+            yield Button("Edit", id="edit", variant="warning")
+            yield Button("Delete", id="delete", variant="error")
+            yield Button("Close", id="close", variant="default")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        table = self.query_one("#profile-table", DataTable)
+        table.clear()
+        profiles = self.manager.list_profiles()
+        for i, p in enumerate(profiles, 1):
+            table.add_row(str(i), p["nickname"], p.get("ip", ""), p.get("serial", ""), p["quality"])
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        bid = event.button.id
+        if bid == "close":
+            self.dismiss()
+        elif bid == "add":
+            self.app.push_screen(ProfileEditScreen(self.manager), self._on_profile_saved)
+        elif bid == "edit":
+            table = self.query_one("#profile-table", DataTable)
+            row = table.cursor_row
+            profiles = self.manager.list_profiles()
+            if row is None or not (0 <= row < len(profiles)):
+                self.app.notify("Select a profile to edit.", severity="error")
+                return
+            self.app.push_screen(ProfileEditScreen(self.manager, profiles[row]), self._on_profile_saved)
+        elif bid == "delete":
+            table = self.query_one("#profile-table", DataTable)
+            row = table.cursor_row
+            profiles = self.manager.list_profiles()
+            if row is None or not (0 <= row < len(profiles)):
+                self.app.notify("Select a profile to delete.", severity="error")
+                return
+            target = profiles[row]
+            self.app.push_screen(
+                ConfirmScreen(f"Delete profile '{target['name']}'?", "Delete"),
+                lambda confirmed: self._on_delete(confirmed, target["name"]),
+            )
+
+    def _on_profile_saved(self, result: dict[str, str] | None) -> None:
+        if result is None:
+            return
+        try:
+            self.manager.save_profile(
+                profile_name=result["name"],
+                nickname=result["nickname"],
+                ip=result.get("ip", ""),
+                serial=result.get("serial", ""),
+                quality=result.get("quality", "balanced"),
+                mode=result.get("mode", "mirror"),
+                keep_active=result.get("keep_active", ""),
+                background_color=result.get("background_color", ""),
+            )
+            self.app.notify(f"Profile '{result['name']}' saved")
+            self._refresh()
+        except Exception as exc:
+            self.app.push_screen(MessageScreen(str(exc), "Save Error"))
+
+    def _on_delete(self, confirmed: bool | None, name: str) -> None:
+        if confirmed:
+            self.manager.delete_profile(name)
+            self.app.notify(f"Deleted '{name}'")
+            self._refresh()
+
+
 class MainScreen(Screen[None]):
     """Main screen showing devices, profiles, and action buttons."""
 
@@ -269,6 +412,7 @@ class MainScreen(Screen[None]):
         Binding("p", "quickapp", "QuickApp"),
         Binding("a", "profiles", "Profiles"),
         Binding("l", "quick_launch", "Quick Launch"),
+        Binding("u", "update", "Update"),
         Binding("x", "shutdown", "Shutdown"),
     ]
 
@@ -323,6 +467,7 @@ class MainScreen(Screen[None]):
                 yield Button("[C] Camera Mode", id="act-camera", classes="action-btn")
                 yield Button("[P] Quick App", id="act-quickapp", classes="action-btn")
                 yield Button("[A] Profiles", id="act-profiles", classes="action-btn")
+                yield Button("[U] Update scrcpy", id="act-update", classes="action-btn")
                 yield Button("[X] Shutdown ADB", id="act-shutdown", classes="action-btn")
                 yield Button("[R] Refresh", id="act-refresh", classes="action-btn")
                 yield Button("[Q] Quit", id="act-quit", classes="action-btn")
@@ -338,6 +483,21 @@ class MainScreen(Screen[None]):
                 self.app.notify(f"Auto-reconnected: {', '.join(reconnected)}")
         except Exception:
             pass
+
+        # Non-blocking background update check (notification only in TUI)
+        if self.manager.get_pref_bool("auto_check_updates", True):
+            try:
+                from scrcpy_cli import check_updates_silent
+
+                newer = check_updates_silent()
+                if newer:
+                    self.app.notify(
+                        f"Update available: {newer}. Press [U] to update.",
+                        severity="information",
+                        timeout=8,
+                    )
+            except Exception:
+                pass
 
         self.refresh_data()
         self.set_interval(3, self.refresh_data)
@@ -455,6 +615,8 @@ class MainScreen(Screen[None]):
             self.action_profiles()
         elif button_id == "act-quick":
             self.action_quick_launch()
+        elif button_id == "act-update":
+            self.action_update()
         elif button_id == "act-shutdown":
             self.action_shutdown()
 
@@ -663,165 +825,31 @@ class MainScreen(Screen[None]):
                 self.app.push_screen(MessageScreen(str(exc), "Shutdown Error"))
             self.refresh_data()
 
-    def _run_scrcpy(self, args: list[str]) -> None:
-        from pathlib import Path
+    def action_update(self) -> None:
+        self.app.push_screen(
+            ConfirmScreen(
+                "Download and install the latest scrcpy/adb binaries from GitHub?\n"
+                "A backup of the current bin/ folder will be created.",
+                "Update scrcpy",
+            ),
+            self._on_update_confirm,
+        )
 
-        from scrcpy_manager import SCRCPY_EXE, quote_command
-
-        self.status_message = "Launching scrcpy..."
-        try:
-            cmd = [str(SCRCPY_EXE), *args]
-            subprocess.Popen(cmd, cwd=Path(__file__).resolve().parent)
-            self.app.notify(f"Launched: {quote_command(cmd)}")
-        except Exception as exc:
-            self.app.push_screen(MessageScreen(str(exc), "Launch Error"))
-        self.refresh_data()
-
-
-class InputScreen(ModalScreen[str | None]):
-    """Simple input dialog."""
-
-    def __init__(self, label: str, default: str = "") -> None:
-        self.label = label
-        self.default = default
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield Static(self.label, classes="dialog-title")
-        yield Input(value=self.default, id="input")
-        with Horizontal(classes="dialog-buttons"):
-            yield Button("OK", id="ok", variant="primary")
-            yield Button("Cancel", id="cancel", variant="default")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "ok":
-            self.dismiss(self.query_one("#input", Input).value.strip() or None)
-        elif event.button.id == "cancel":
-            self.dismiss(None)
-
-
-class DiscoverListScreen(ModalScreen[tuple[ScrcpyManager, str, str] | None]):
-    """Screen to select from discovered devices."""
-
-    def __init__(self, manager: ScrcpyManager, items: list[tuple[str, str, str]]) -> None:
-        self.manager = manager
-        self.items = items
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield Static("Discovered Devices", classes="dialog-title")
-        table = DataTable(id="discover-table")
-        table.add_columns("#", "Name", "Address", "Source")
-        table.cursor_type = "row"
-        table.zebra_stripes = True
-        for i, (name, ipport, source) in enumerate(self.items, 1):
-            table.add_row(str(i), name, ipport, source)
-        yield table
-        yield Static("Select a device and press Enter", classes="panel-subtitle")
-        with Horizontal(classes="dialog-buttons"):
-            yield Button("Connect", id="connect", variant="primary")
-            yield Button("Cancel", id="cancel", variant="default")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "cancel":
-            self.dismiss(None)
-        elif event.button.id == "connect":
-            table = self.query_one("#discover-table", DataTable)
-            row = table.cursor_row
-            if row is not None and 0 <= row < len(self.items):
-                name, ipport, _ = self.items[row]
-                self.dismiss((self.manager, ipport, name))
-            else:
-                self.app.notify("Select a device first.", severity="error")
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        row = event.cursor_row
-        if row is not None and 0 <= row < len(self.items):
-            name, ipport, _ = self.items[row]
-            self.dismiss((self.manager, ipport, name))
-
-
-class ProfileListScreen(ModalScreen[None]):
-    """Screen to manage profiles (list, add, edit, delete)."""
-
-    def __init__(self, manager: ScrcpyManager) -> None:
-        self.manager = manager
-        super().__init__()
-
-    def compose(self) -> ComposeResult:
-        yield Static("Profile Manager", classes="dialog-title")
-        table = DataTable(id="profile-table")
-        table.add_columns("#", "Name", "IP", "Serial", "Quality")
-        table.cursor_type = "row"
-        table.zebra_stripes = True
-        yield table
-        with Horizontal(classes="dialog-buttons"):
-            yield Button("Add", id="add", variant="primary")
-            yield Button("Edit", id="edit", variant="warning")
-            yield Button("Delete", id="delete", variant="error")
-            yield Button("Close", id="close", variant="default")
-
-    def on_mount(self) -> None:
-        self._refresh()
-
-    def _refresh(self) -> None:
-        table = self.query_one("#profile-table", DataTable)
-        table.clear()
-        profiles = self.manager.list_profiles()
-        for i, p in enumerate(profiles, 1):
-            table.add_row(str(i), p["nickname"], p.get("ip", ""), p.get("serial", ""), p["quality"])
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        bid = event.button.id
-        if bid == "close":
-            self.dismiss()
-        elif bid == "add":
-            self.app.push_screen(ProfileEditScreen(self.manager), self._on_profile_saved)
-        elif bid == "edit":
-            table = self.query_one("#profile-table", DataTable)
-            row = table.cursor_row
-            profiles = self.manager.list_profiles()
-            if row is None or not (0 <= row < len(profiles)):
-                self.app.notify("Select a profile to edit.", severity="error")
-                return
-            self.app.push_screen(ProfileEditScreen(self.manager, profiles[row]), self._on_profile_saved)
-        elif bid == "delete":
-            table = self.query_one("#profile-table", DataTable)
-            row = table.cursor_row
-            profiles = self.manager.list_profiles()
-            if row is None or not (0 <= row < len(profiles)):
-                self.app.notify("Select a profile to delete.", severity="error")
-                return
-            target = profiles[row]
-            self.app.push_screen(
-                ConfirmScreen(f"Delete profile '{target['name']}'?", "Delete"),
-                lambda confirmed: self._on_delete(confirmed, target["name"]),
-            )
-
-    def _on_profile_saved(self, result: dict[str, str] | None) -> None:
-        if result is None:
+    def _on_update_confirm(self, confirmed: bool | None) -> None:
+        if not confirmed:
             return
+        self.status_message = "Updating scrcpy..."
         try:
-            self.manager.save_profile(
-                profile_name=result["name"],
-                nickname=result["nickname"],
-                ip=result.get("ip", ""),
-                serial=result.get("serial", ""),
-                quality=result.get("quality", "balanced"),
-                mode=result.get("mode", "mirror"),
-                keep_active=result.get("keep_active", ""),
-                background_color=result.get("background_color", ""),
-            )
-            self.app.notify(f"Profile '{result['name']}' saved")
-            self._refresh()
-        except Exception as exc:
-            self.app.push_screen(MessageScreen(str(exc), "Save Error"))
+            from scrcpy_cli import update_scrcpy
 
-    def _on_delete(self, confirmed: bool | None, name: str) -> None:
-        if confirmed:
-            self.manager.delete_profile(name)
-            self.app.notify(f"Deleted '{name}'")
-            self._refresh()
+            result = update_scrcpy()
+            if result == 0:
+                self.app.notify("scrcpy updated successfully! Restart to use new binaries.")
+            else:
+                self.app.push_screen(MessageScreen("Update failed. Check the logs for details.", "Update Error"))
+        except Exception as exc:
+            self.app.push_screen(MessageScreen(str(exc), "Update Error"))
+        self.refresh_data()
 
 
 class ScrcpyTuiApp(App[None]):
