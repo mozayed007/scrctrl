@@ -1,7 +1,7 @@
 <div align="center">
 
 <!--
-  Logo placeholder — replace with a banner image when ready
+  Logo placeholder - replace with a banner image when ready
   e.g. <img src="docs/assets/banner.png" width="700" alt="ScrCtrl Banner">
 -->
 
@@ -34,7 +34,7 @@
 
 ---
 
-> **Disclaimer:** This is an **unofficial community project**. `scrcpy` is a trademark of [Genymobile](https://github.com/Genymobile). This manager is a separate Python wrapper — it does not modify or distribute scrcpy source code. Pre-built binaries are downloaded directly from official Genymobile/scrcpy GitHub releases under the Apache 2.0 License. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
+> **Disclaimer:** This is an **unofficial community project**. `scrcpy` is a trademark of [Genymobile](https://github.com/Genymobile). This manager is a separate Python wrapper - it does not modify or distribute scrcpy source code. Pre-built binaries are downloaded directly from official Genymobile/scrcpy GitHub releases under the Apache 2.0 License. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
 
 ---
 
@@ -48,9 +48,9 @@
 
 | | Feature | Description |
 |---|---|---|
-| :tv: | **Rich Textual TUI** | Live device list, auto-refresh, modal dialogs, hotkeys — or falls back to a clean terminal menu automatically |
+| :tv: | **Rich Textual TUI** | Live device list, auto-refresh, modal dialogs, hotkeys - or falls back to a clean terminal menu automatically |
 | :satellite: | **Network Auto-Discovery** | mDNS-based discovery across all network interfaces (Android 11+ Wireless Debugging) |
-| :calling: | **Wireless ADB Setup Wizard** | One-time USB pairing, then wireless forever — no cables needed after setup |
+| :calling: | **Wireless ADB Setup Wizard** | One-time USB pairing, then wireless forever - no cables needed after setup |
 | :camera: | **Camera Mode** | Launch device cameras as webcam sources directly from the menu |
 | :rocket: | **Quick App Launcher** | Start Android apps in mirror or virtual display mode without typing package names |
 | :bookmark_tabs: | **Device Profiles** | Save nicknames, IPs, serials, quality presets, and per-device settings across sessions |
@@ -82,7 +82,7 @@ This fetches the latest official Windows release (including `adb.exe`) into `bin
 pip install textual
 ```
 
-> Without Textual, the manager automatically falls back to a clean `input()`-based menu — zero hard dependencies.
+> Without Textual, the manager automatically falls back to a clean `input()`-based menu - zero hard dependencies.
 
 ---
 
@@ -454,22 +454,22 @@ scrctrl/
 | **Pairing protocol fault** | Manager auto-restarts ADB server and retries once. |
 | **TUI looks plain / won't start** | Install Textual: `pip install textual`. Falls back to text menu without it. |
 | **No scrcpy.exe found** | Run `python scrcpy_cli.py update` to download binaries. |
-| **Legacy menu stuck** | Press `Ctrl+C` — all interactive paths handle `KeyboardInterrupt`. |
+| **Legacy menu stuck** | Press `Ctrl+C` - all interactive paths handle `KeyboardInterrupt`. |
 
 ---
 
 ## :wrench: Built With
 
-- [scrcpy](https://github.com/Genymobile/scrcpy) — Android screen mirroring & control
-- [Textual](https://github.com/Textualize/textual) — Python TUI framework
-- [adb](https://developer.android.com/studio/releases/platform-tools) — Android Debug Bridge
+- [scrcpy](https://github.com/Genymobile/scrcpy) - Android screen mirroring & control
+- [Textual](https://github.com/Textualize/textual) - Python TUI framework
+- [adb](https://developer.android.com/studio/releases/platform-tools) - Android Debug Bridge
 - Python 3.9+
 
 ---
 
 ## :handshake: Contributing
 
-Contributions are welcome! Whether it's bug reports, feature ideas, or pull requests — feel free to open an [issue](https://github.com/mozayed007/scrctrl/issues) or submit a PR.
+Contributions are welcome! Whether it's bug reports, feature ideas, or pull requests - feel free to open an [issue](https://github.com/mozayed007/scrctrl/issues) or submit a PR.
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/my-feature`
@@ -483,7 +483,7 @@ Please keep code style consistent with the existing codebase and add comments fo
 
 ## :star: Show Your Support
 
-If you find this project useful, please consider giving it a :star: on GitHub — it helps others discover it!
+If you find this project useful, please consider giving it a :star: on GitHub - it helps others discover it!
 
 <a href="https://github.com/mozayed007/scrctrl/stargazers">
   <img src="https://reporanger.com/badge/mozayed007/scrctrl" alt="Stargazers" />
@@ -493,21 +493,21 @@ If you find this project useful, please consider giving it a :star: on GitHub �
 
 ## :scroll: License
 
-This manager (Python code) is licensed under the **MIT License** — see [LICENSE](LICENSE).
+This manager (Python code) is licensed under the **MIT License** - see [LICENSE](LICENSE).
 
 Third-party binaries (`scrcpy.exe`, `adb.exe`, SDL3, FFmpeg, dav1d) are downloaded from the official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) releases and are licensed under their respective terms. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) and [NOTICE](NOTICE) for full attribution.
 
 | Component | License | File |
 |-----------|---------|------|
 | scrcpy & adb | Apache 2.0 | [licenses/scrcpy-LICENSE](licenses/scrcpy-LICENSE) |
-| SDL3 | zlib License | — |
-| FFmpeg | LGPL 2.1+ / GPL 2+ | — |
-| dav1d | BSD 2-Clause | — |
+| SDL3 | zlib License | - |
+| FFmpeg | LGPL 2.1+ / GPL 2+ | - |
+| dav1d | BSD 2-Clause | - |
 
 Copyright (c) 2026 Scrcpy Device Manager Contributors.
 
 ---
 
 <div align="center">
-  <sub>Built with :heart: by <a href="https://github.com/mozayed007">mozayed007</a>, Kilo (Kimi K2.6 Turbo — Fireworks AI), & <a href="https://github.com/mozayed007/scrctrl/graphs/contributors">contributors</a></sub>
+  <sub>Built with :heart: by <a href="https://github.com/mozayed007">mozayed007</a>, Kilo (Kimi K2.6 Turbo - Fireworks AI), & <a href="https://github.com/mozayed007/scrctrl/graphs/contributors">contributors</a></sub>
 </div>

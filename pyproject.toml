@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "scrctrl"
 version = "1.0.0"
-description = "A Python TUI/CLI manager for scrcpy — device discovery, profiles, wireless ADB setup, and auto-updates"
+description = "A Python TUI/CLI manager for scrcpy - device discovery, profiles, wireless ADB setup, and auto-updates"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
