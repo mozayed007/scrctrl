@@ -339,20 +339,6 @@ class MainScreen(Screen[None]):
         except Exception:
             pass
 
-        # Silent background update check
-        if self.manager.get_pref_bool("auto_check_updates", True):
-            try:
-                from scrcpy_cli import check_updates_silent
-
-                newer = check_updates_silent()
-                if newer:
-                    self.app.notify(
-                        f"Update available: {newer}. Run update command to install.",
-                        severity="information",
-                    )
-            except Exception:
-                pass
-
         self.refresh_data()
         self.set_interval(3, self.refresh_data)
 

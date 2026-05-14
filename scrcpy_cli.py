@@ -24,6 +24,7 @@ from scrcpy_manager import (
     ROOT,
     SCRCPY_EXE,
     logger,
+    prompt_yes_no,
 )
 
 
@@ -311,11 +312,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         except Exception:
             pass
 
-        # Silent background update check (notify only)
+        # Background update check with optional auto-install prompt
         if manager.get_pref_bool("auto_check_updates", True):
             newer = check_updates_silent()
             if newer:
-                print(f"Update available: {newer}  Run 'python scrcpy_cli.py update' to install.")
+                print(f"\nUpdate available: {newer}")
+                if manager.get_pref_bool("auto_install_updates", True):
+                    if prompt_yes_no("Install now", default=True):
+                        update_result = update_scrcpy()
+                        if update_result == 0:
+                            print("\nUpdate installed. Restarting menu...\n")
+                        else:
+                            print("\nUpdate failed or was cancelled. Continuing with current version.\n")
+                    else:
+                        print("Skipping update. You can run it later with: python scrcpy_cli.py update\n")
+                else:
+                    print("Run 'python scrcpy_cli.py update' to install.\n")
 
         # Try Textual TUI first, fall back to legacy terminal menu
         try:
