@@ -345,6 +345,54 @@ class ScrcpyManager:
             parser["preferences"] = {}
         return parser
 
+    def get_pref_bool(self, key: str, default: bool = True) -> bool:
+        """Read a boolean preference from userprefs.ini.
+
+        Args:
+            key: Preference key name
+            default: Default value if missing or invalid
+
+        Returns:
+            True/False based on stored value (yes/true/1 vs no/false/0)
+        """
+        prefs = self.get_user_prefs()
+        val = prefs.get("preferences", key, fallback="").strip().lower()
+        if val in ("yes", "true", "1", "on"):
+            return True
+        if val in ("no", "false", "0", "off"):
+            return False
+        return default
+
+    def auto_connect_profiles(self) -> list[str]:
+        """Proactively reconnect saved wireless profiles that are offline.
+
+        Scans all saved profiles with IP addresses and attempts adb connect
+        for any whose serial is not currently visible. Returns a list of
+        successfully reconnected profile names.
+        """
+        connected_serials = {device.serial for device in self.list_devices()}
+        reconnected: list[str] = []
+        for profile in self.list_profiles():
+            ip = profile.get("ip", "").strip()
+            serial = profile.get("serial", "").strip()
+            if not ip:
+                continue
+            # Already connected via this serial or IP?
+            if serial and serial in connected_serials:
+                continue
+            if any(d.serial == ip for d in self.list_devices()):
+                continue
+            # Try mDNS discovery first, then fallback to saved IP
+            discovered_port = self.discover_device_port(ip)
+            target = discovered_port or f"{ip}:{DEFAULT_ADB_PORT}"
+            success, message, connected_serial = self.connect_wireless(target)
+            if success and connected_serial:
+                logger.info(f"Auto-connected profile '{profile['name']}' via {target}")
+                reconnected.append(profile["name"])
+            else:
+                logger.debug(f"Auto-connect failed for '{profile['name']}': {message}")
+        return reconnected
+
     def get_quality_config(self) -> configparser.ConfigParser:
         """Get quality presets configuration.
 
@@ -827,7 +875,11 @@ class ScrcpyManager:
                     success, message, resolved_connection = self.connect_wireless(f"{ip}:{DEFAULT_ADB_PORT}")
 
                 if not success:
-                    raise RuntimeError(f"Failed to connect to {ip}: {message}")
+                    raise RuntimeError(
+                        f"Failed to connect to {ip}: {message}\n"
+                        "The device may have rebooted or changed IP. "
+                        "Run wireless setup again or check the IP in profiles."
+                    )
             if not resolved_connection and serial:
                 connected_serials = {device.serial for device in self.list_devices()}
                 if serial in connected_serials:

@@ -244,6 +244,31 @@ def update_scrcpy(
     return 0
 
 
+def check_updates_silent() -> str | None:
+    """Silently check GitHub for a newer scrcpy release.
+
+    Returns:
+        Newer version tag (e.g. 'v4.1') if available, else None.
+    """
+    try:
+        api_url = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
+        req = urllib.request.Request(api_url, headers={"User-Agent": "scrcpy-manager-updater"})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            release = json.load(response)
+        tag_name = release.get("tag_name", "")
+        if not tag_name:
+            return None
+        current_version = get_current_scrcpy_version()
+        if current_version != "unknown":
+            current_tuple = parse_version_tag(current_version)
+            latest_tuple = parse_version_tag(tag_name)
+            if current_tuple and latest_tuple and current_tuple >= latest_tuple:
+                return None
+        return tag_name
+    except Exception:
+        return None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Python scrcpy terminal manager")
     subparsers = parser.add_subparsers(dest="command")
@@ -278,6 +303,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     manager = LegacyMenu()
 
     if command == "menu":
+        # Auto-reconnect saved wireless profiles before showing UI
+        try:
+            reconnected = manager.auto_connect_profiles()
+            if reconnected:
+                print(f"Auto-reconnected: {', '.join(reconnected)}")
+        except Exception:
+            pass
+
+        # Silent background update check (notify only)
+        if manager.get_pref_bool("auto_check_updates", True):
+            newer = check_updates_silent()
+            if newer:
+                print(f"Update available: {newer}  Run 'python scrcpy_cli.py update' to install.")
+
         # Try Textual TUI first, fall back to legacy terminal menu
         try:
             from scrcpy_tui import run_tui

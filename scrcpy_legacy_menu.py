@@ -481,6 +481,14 @@ class LegacyMenu(ScrcpyManager):
         Returns:
             0 on quit, scrcpy exit code on device launch
         """
+        # Auto-reconnect saved wireless profiles on menu startup
+        try:
+            reconnected = self.auto_connect_profiles()
+            if reconnected:
+                print(f"Auto-reconnected: {', '.join(reconnected)}")
+        except Exception:
+            pass
+
         prefs = self.get_user_prefs()
         timeout_value = prefs.get("preferences", "quick_launch_timeout", fallback="3").strip() or "3"
 
