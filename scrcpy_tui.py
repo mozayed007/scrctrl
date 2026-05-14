@@ -7,15 +7,15 @@ sessions. Falls back gracefully if Textual is not installed.
 
 from __future__ import annotations
 
-import shlex
 import subprocess
-from typing import TYPE_CHECKING
+from typing import ClassVar
 
 # Textual imports with graceful fallback
 try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.containers import Horizontal, Vertical, VerticalScroll
+    from textual.reactive import reactive
     from textual.screen import ModalScreen, Screen
     from textual.widgets import (
         Button,
@@ -24,13 +24,10 @@ try:
         Footer,
         Header,
         Input,
-        Label,
-        ListItem,
-        ListView,
         Select,
         Static,
     )
-    from textual.reactive import reactive
+
     TEXTUAL_AVAILABLE = True
 except ImportError:
     TEXTUAL_AVAILABLE = False
@@ -143,7 +140,9 @@ class ProfileEditScreen(ModalScreen[dict[str, str] | None]):
         keep_active_val = self.profile.get("keep_active", "").lower() in {"__yes__", "yes", "y", "true"}
         yield Checkbox("Prevent sleep (--keep-active)", value=keep_active_val, id="keep_active")
         yield Static("Background color (optional)", classes="label")
-        yield Input(value=self.profile.get("background_color", ""), placeholder="#234567 or 234567", id="background_color")
+        yield Input(
+            value=self.profile.get("background_color", ""), placeholder="#234567 or 234567", id="background_color"
+        )
         with Horizontal(classes="dialog-buttons"):
             yield Button("Save", id="save", variant="primary")
             yield Button("Cancel", id="cancel", variant="default")
@@ -222,7 +221,7 @@ class CameraSetupScreen(ModalScreen[list[str] | None]):
             quality_map = {"1": "camera_low", "2": "camera_balanced", "3": "camera_high"}
             preset = quality_map.get(quality_val, "camera_balanced")
             zoom = self.query_one("#zoom", Input).value.strip()
-            self.dismiss([preset, *args, *( [f"--camera-zoom={zoom}"] if zoom else [] )])
+            self.dismiss([preset, *args, *([f"--camera-zoom={zoom}"] if zoom else [])])
 
 
 class QuickAppScreen(ModalScreen[list[str] | None]):
@@ -260,7 +259,7 @@ class QuickAppScreen(ModalScreen[list[str] | None]):
 class MainScreen(Screen[None]):
     """Main screen showing devices, profiles, and action buttons."""
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("d", "detect", "Detect"),
@@ -273,7 +272,7 @@ class MainScreen(Screen[None]):
         Binding("x", "shutdown", "Shutdown"),
     ]
 
-    CSS = """
+    CSS: ClassVar[str] = """"
     Screen { align: center middle; }
     #main-container { width: 100%; height: 100%; layout: horizontal; }
     #devices-panel { width: 35%; height: 100%; border: round $primary; padding: 1; }
@@ -456,20 +455,18 @@ class MainScreen(Screen[None]):
         self.app.notify("Refreshed")
 
     def action_detect(self) -> None:
-        self.app.push_screen(MessageScreen(
-            "Use the device list on the left. Auto-refresh is active.",
-            "Device Detection"
-        ))
+        self.app.push_screen(
+            MessageScreen("Use the device list on the left. Auto-refresh is active.", "Device Detection")
+        )
 
     def action_discover(self) -> None:
         self.status_message = "Discovering..."
         try:
             devices = self.manager.mdns_discover()
             if not devices:
-                self.app.push_screen(MessageScreen(
-                    "No devices found via mDNS.\nEnable Wireless Debugging on Android 11+.",
-                    "Discovery"
-                ))
+                self.app.push_screen(
+                    MessageScreen("No devices found via mDNS.\nEnable Wireless Debugging on Android 11+.", "Discovery")
+                )
                 return
 
             items: list[tuple[str, str, str]] = []
@@ -557,7 +554,7 @@ class MainScreen(Screen[None]):
         self.app.push_screen(
             ConfirmScreen(
                 "Wireless Setup Wizard\n\nRequirements:\n- USB debugging enabled\n- Device connected via USB\n- Computer authorized\n\nProceed?",
-                "Setup Wireless"
+                "Setup Wireless",
             ),
             self._on_setup_confirm,
         )
@@ -595,14 +592,6 @@ class MainScreen(Screen[None]):
         # Use first device for simplicity; could add device selection screen
         selected = devices[0]
         settings = self.manager.get_quality_settings(preset)
-        profile = {
-            "name": selected.display_name,
-            "nickname": selected.display_name,
-            "quality": preset,
-            "mode": "camera",
-            "keep_active": "",
-            "background_color": "",
-        }
         args = ["-s", selected.serial, *extra_args]
         if settings.get("video_bitrate"):
             args.append(f"--video-bit-rate={settings['video_bitrate']}")
@@ -668,7 +657,9 @@ class MainScreen(Screen[None]):
 
     def _run_scrcpy(self, args: list[str]) -> None:
         from pathlib import Path
+
         from scrcpy_manager import SCRCPY_EXE, quote_command
+
         self.status_message = "Launching scrcpy..."
         try:
             cmd = [str(SCRCPY_EXE), *args]
@@ -859,9 +850,6 @@ class ScrcpyTuiApp(App[None]):
 def run_tui(manager: ScrcpyManager) -> None:
     """Run the Textual TUI."""
     if not TEXTUAL_AVAILABLE:
-        raise ImportError(
-            "Textual is required for the TUI. Install it with:\n"
-            "  pip install textual"
-        )
+        raise ImportError("Textual is required for the TUI. Install it with:\n  pip install textual")
     app = ScrcpyTuiApp(manager)
     app.run()

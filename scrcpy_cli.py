@@ -9,23 +9,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import shutil
 import subprocess
 import sys
 import tempfile
 import urllib.request
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
+from scrcpy_legacy_menu import LegacyMenu
 from scrcpy_manager import (
     BIN_DIR,
     ROOT,
     SCRCPY_EXE,
     logger,
 )
-from scrcpy_legacy_menu import LegacyMenu
 
 
 def get_current_scrcpy_version() -> str:
@@ -140,13 +139,12 @@ def update_scrcpy(
 
             print(f"Downloading to {zip_path} ...")
             download_req = urllib.request.Request(asset_url, headers={"User-Agent": "scrcpy-manager-updater"})
-            with urllib.request.urlopen(download_req, timeout=120) as dl_resp:
-                with zip_path.open("wb") as f:
-                    while True:
-                        chunk = dl_resp.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
+            with urllib.request.urlopen(download_req, timeout=120) as dl_resp, zip_path.open("wb") as f:
+                while True:
+                    chunk = dl_resp.read(8192)
+                    if not chunk:
+                        break
+                    f.write(chunk)
 
             print("Download complete.")
 
@@ -283,6 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Try Textual TUI first, fall back to legacy terminal menu
         try:
             from scrcpy_tui import run_tui
+
             run_tui(manager)
             return 0
         except ImportError as exc:

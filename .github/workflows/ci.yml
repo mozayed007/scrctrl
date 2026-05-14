@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy textual
+
+      - name: Run Ruff linter
+        run: ruff check --output-format=github .
+
+      - name: Run Ruff format check
+        run: ruff format --check .
+
+      - name: Run MyPy type checker
+        run: mypy --ignore-missing-imports scrcpy_manager.py scrcpy_cli.py scrcpy_legacy_menu.py scrcpy_tui.py scrcpy-menu.py
+
+  syntax:
+    name: Syntax & Import Check
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Syntax check all Python files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty FullName
+          $failed = $false
+          foreach ($file in $files) {
+            Write-Host "Checking syntax: $file"
+            python -m py_compile "$file"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Verify core modules are importable
+        shell: pwsh
+        run: |
+          # These should import without side-effects (classes are defined, nothing runs)
+          python -c "import scrcpy_manager; print('scrcpy_manager OK')"
+          python -c "import scrcpy_legacy_menu; print('scrcpy_legacy_menu OK')"
+          python -c "import scrcpy_tui; print('scrcpy_tui OK')"
+
+      - name: Verify CLI module is importable
+        shell: pwsh
+        run: |
+          python -c "import scrcpy_cli; print('scrcpy_cli OK')"
+
+      - name: Verify script wrappers are importable
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem -Path "scripts" -Filter "*.py" | Select-Object -ExpandProperty FullName
+          foreach ($script in $scripts) {
+            Write-Host "Checking import: $script"
+            python -m py_compile "$script"
+          }
+
+  smoke:
+    name: Smoke Test (CLI --help)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install textual
+
+      - name: Verify CLI --help works
+        shell: pwsh
+        run: |
+          # scrcpy binaries won't exist, so we can't run most commands,
+          # but --help should work because it doesn't instantiate ScrcpyManager
+          python scrcpy_cli.py --help
+
+      - name: Verify script wrapper --help works
+        shell: pwsh
+        run: |
+          python scripts\scrcpy-detect.py --help
+          python scripts\scrcpy-discover.py --help
+          python scripts\scrcpy-setup.py --help

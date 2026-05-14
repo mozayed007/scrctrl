@@ -7,18 +7,16 @@ reuses the existing config files and bundled binaries in this folder.
 
 from __future__ import annotations
 
-import argparse
 import configparser
 import logging
 import os
 import shlex
 import shutil
 import subprocess
-import sys
 import time
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
 
 # Configure logging
 logging.basicConfig(
@@ -560,9 +558,7 @@ class ScrcpyManager:
                     "nickname": parser.get(section, "nickname", fallback=section).strip(),
                     "ip": parser.get(section, "ip", fallback="").strip(),
                     "serial": parser.get(section, "serial", fallback="").strip(),
-                    "quality": normalize_quality_name(
-                        parser.get(section, "quality", fallback=DEFAULT_QUALITY)
-                    ),
+                    "quality": normalize_quality_name(parser.get(section, "quality", fallback=DEFAULT_QUALITY)),
                     "mode": parser.get(section, "mode", fallback=DEFAULT_MODE).strip() or DEFAULT_MODE,
                     "keep_active": parser.get(section, "keep_active", fallback="").strip(),
                     "background_color": parser.get(section, "background_color", fallback="").strip(),
@@ -590,9 +586,7 @@ class ScrcpyManager:
             "nickname": parser.get(profile_name, "nickname", fallback=profile_name).strip(),
             "ip": parser.get(profile_name, "ip", fallback="").strip(),
             "serial": parser.get(profile_name, "serial", fallback="").strip(),
-            "quality": normalize_quality_name(
-                parser.get(profile_name, "quality", fallback=DEFAULT_QUALITY)
-            ),
+            "quality": normalize_quality_name(parser.get(profile_name, "quality", fallback=DEFAULT_QUALITY)),
             "mode": parser.get(profile_name, "mode", fallback=DEFAULT_MODE).strip() or DEFAULT_MODE,
             "keep_active": parser.get(profile_name, "keep_active", fallback="").strip(),
             "background_color": parser.get(profile_name, "background_color", fallback="").strip(),
@@ -841,9 +835,7 @@ class ScrcpyManager:
                     resolved_connection = serial
 
         if not resolved_connection:
-            raise RuntimeError(
-                f"Profile '{profile_name}' is not currently reachable. Connect USB or re-run setup."
-            )
+            raise RuntimeError(f"Profile '{profile_name}' is not currently reachable. Connect USB or re-run setup.")
 
         resolved_type = resolved_type or ("WIRELESS" if ":" in resolved_connection else "USB")
         self.set_last_used(profile_name, resolved_type.lower(), resolved_connection)
@@ -967,12 +959,7 @@ class ScrcpyManager:
             name_parts = device_name.split("-")
             name = name_parts[1] if len(name_parts) > 1 else device_name
 
-            results.append(DiscoveredDevice(
-                name=name,
-                ipport=ipport,
-                source="mDNS",
-                service_type=service_type
-            ))
+            results.append(DiscoveredDevice(name=name, ipport=ipport, source="mDNS", service_type=service_type))
         return results
 
     def pair_device(self, ipport: str, pairing_code: str) -> tuple[bool, str]:
@@ -1025,10 +1012,9 @@ class ScrcpyManager:
         """
         devices = self.mdns_discover()
         for device in devices:
-            if device.service_type in ("_adb-tls-connect._tcp", "_adb._tcp"):
-                if device.ipport.startswith(ip):
-                    logger.debug(f"Found device {ip} at {device.ipport} via mDNS")
-                    return device.ipport
+            if device.service_type in ("_adb-tls-connect._tcp", "_adb._tcp") and device.ipport.startswith(ip):
+                logger.debug(f"Found device {ip} at {device.ipport} via mDNS")
+                return device.ipport
         return None
 
     def select_usb_device(self) -> Device:
@@ -1065,10 +1051,12 @@ class ScrcpyManager:
         # Build commands for different network interfaces
         commands = [["ip", "route"]]
         for interface in NETWORK_INTERFACES:
-            commands.extend([
-                ["ip", "addr", "show", interface],
-                ["ip", "-f", "inet", "addr", "show", interface],
-            ])
+            commands.extend(
+                [
+                    ["ip", "addr", "show", interface],
+                    ["ip", "-f", "inet", "addr", "show", interface],
+                ]
+            )
 
         candidates: list[str] = []
         for command in commands:
@@ -1151,6 +1139,3 @@ class ScrcpyManager:
         if not detach:
             print(f"\nCommand: {quote_command([str(SCRCPY_EXE), *args])}\n")
         return self.scrcpy(args, detach=detach)
-
-
-

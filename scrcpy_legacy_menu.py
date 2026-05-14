@@ -8,13 +8,11 @@ Textual TUI is not available or not desired.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from scrcpy_manager import (
     DEFAULT_ADB_PORT,
     DEFAULT_MODE,
     DEFAULT_QUALITY,
-    Device,
     ScrcpyManager,
     clear_screen,
     is_valid_camera_id,
@@ -26,9 +24,6 @@ from scrcpy_manager import (
     quote_command,
     sanitize_profile_name,
 )
-
-if TYPE_CHECKING:
-    import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -63,21 +58,21 @@ class LegacyMenu(ScrcpyManager):
                 for index, device in enumerate(pairing_devices, start=1):
                     print(f"[{index}] {device.name}")
                     print(f"    Address: {device.ipport}")
-                    print(f"    Type:    Pairing required\n")
+                    print("    Type:    Pairing required\n")
 
             if connect_devices:
                 print("Already paired devices (Android 11+):\n")
                 for index, device in enumerate(connect_devices, start=len(pairing_devices) + 1):
                     print(f"[{index}] {device.name}")
                     print(f"    Address: {device.ipport}")
-                    print(f"    Type:    Ready to connect\n")
+                    print("    Type:    Ready to connect\n")
 
             if legacy_devices:
                 print("Legacy devices (Android <11):\n")
                 for index, device in enumerate(legacy_devices, start=len(pairing_devices) + len(connect_devices) + 1):
                     print(f"[{index}] {device.name}")
                     print(f"    Address: {device.ipport}")
-                    print(f"    Type:    Legacy TCP\n")
+                    print("    Type:    Legacy TCP\n")
 
             # Combine all devices for selection
             all_devices = pairing_devices + connect_devices + legacy_devices
@@ -106,7 +101,9 @@ class LegacyMenu(ScrcpyManager):
                 success, message = self.pair_device(selected.ipport, pairing_code)
                 if not success:
                     print(f"Pairing failed: {message}")
-                    print("Note: Pairing codes expire after a few minutes. Try refreshing the pairing code on your device.")
+                    print(
+                        "Note: Pairing codes expire after a few minutes. Try refreshing the pairing code on your device."
+                    )
                     return 1
 
                 print(f"\n{message}")
@@ -138,9 +135,7 @@ class LegacyMenu(ScrcpyManager):
                 raise RuntimeError(f"Failed to connect to {selected.ipport}: {message}")
 
             if prompt_yes_no("Save this device as a profile", default=True):
-                profile_name = sanitize_profile_name(
-                    prompt("Profile ID", sanitize_profile_name(selected.name))
-                )
+                profile_name = sanitize_profile_name(prompt("Profile ID", sanitize_profile_name(selected.name)))
                 nickname = prompt("Display name", selected.name)
                 # Save IP without port for Android 11+ devices (ports can change)
                 # For legacy devices, we can save the full IP:port
@@ -272,14 +267,6 @@ class LegacyMenu(ScrcpyManager):
         torch = prompt_yes_no("Enable camera torch", default=False)
         zoom_input = prompt("Camera zoom level (1.0 = default, leave empty)", "")
 
-        profile = {
-            "name": selected.display_name,
-            "nickname": selected.display_name,
-            "quality": preset,
-            "mode": "camera",
-            "keep_active": "",
-            "background_color": "",
-        }
         args = ["-s", selected.serial, "--video-source=camera", f"--camera-id={camera_id}"]
         if aspect_choice in aspect_map:
             args.append(f"--camera-ar={aspect_map[aspect_choice]}")
@@ -399,7 +386,9 @@ class LegacyMenu(ScrcpyManager):
                     serial = prompt("USB serial", "")
                     quality = prompt("Quality", "balanced")
                     mode = prompt("Mode", "mirror")
-                    keep_active = "__YES__" if prompt_yes_no("Keep device active (prevent sleep)", default=False) else ""
+                    keep_active = (
+                        "__YES__" if prompt_yes_no("Keep device active (prevent sleep)", default=False) else ""
+                    )
                     background_color = prompt("Background color hex (e.g. #234567, leave empty for default)", "")
                     self.save_profile(
                         profile_name=profile_name,
@@ -436,7 +425,14 @@ class LegacyMenu(ScrcpyManager):
                     quality = prompt("Quality", current["quality"])
                     mode = prompt("Mode", current["mode"])
                     keep_active_default = current.get("keep_active", "")
-                    keep_active = "__YES__" if prompt_yes_no("Keep device active (prevent sleep)", default=keep_active_default.lower() in {"__yes__", "yes", "y", "true"}) else ""
+                    keep_active = (
+                        "__YES__"
+                        if prompt_yes_no(
+                            "Keep device active (prevent sleep)",
+                            default=keep_active_default.lower() in {"__yes__", "yes", "y", "true"},
+                        )
+                        else ""
+                    )
                     background_color = prompt("Background color hex", current.get("background_color", ""))
                     self.save_profile(
                         profile_name=current["name"],

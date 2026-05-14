@@ -1,70 +1,71 @@
-# Scrcpy Device Manager
+<div align="center">
 
-A unified, menu-driven Python interface for managing Android devices with [scrcpy](https://github.com/Genymobile/scrcpy).
+<!--
+  Logo placeholder — replace with a banner image when ready
+  e.g. <img src="docs/assets/banner.png" width="700" alt="ScrCtrl Banner">
+-->
 
-> **Disclaimer:** This is an unofficial community project. `scrcpy` is a trademark of Genymobile. This manager is a separate Python wrapper and does not modify or distribute scrcpy source code. Pre-built scrcpy binaries are downloaded directly from the official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) GitHub releases under the Apache 2.0 License. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
+<pre align="center">
+╔══════════════════════════════════════════╗
+║            <b>S C R C T R L</b>               ║
+║      Scrcpy Device Manager for Windows   ║
+╚══════════════════════════════════════════╝
+</pre>
 
-![Python 3](https://img.shields.io/badge/python-3-blue)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
+<br>
 
----
+<a href="https://github.com/mozayed007/scrctrl/stargazers"><img src="https://img.shields.io/github/stars/mozayed007/scrctrl?style=for-the-badge&color=yellow" alt="Stars"></a>
+<a href="https://github.com/mozayed007/scrctrl/network/members"><img src="https://img.shields.io/github/forks/mozayed007/scrctrl?style=for-the-badge&color=green" alt="Forks"></a>
+<a href="./LICENSE"><img src="https://img.shields.io/github/license/mozayed007/scrctrl?style=for-the-badge&color=brightgreen" alt="License"></a>
+<a href="https://github.com/mozayed007/scrctrl/issues"><img src="https://img.shields.io/github/issues/mozayed007/scrctrl?style=for-the-badge&color=orange" alt="Issues"></a>
+<br>
+<a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.9+"></a>
+<a href="#platform"><img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"></a>
+<a href="https://github.com/Genymobile/scrcpy"><img src="https://img.shields.io/badge/powered%20by-scrcpy-green.svg?style=for-the-badge&logo=android&logoColor=white" alt="Powered by scrcpy"></a>
 
-## Table of Contents
+<p align="center">
+  <b>A unified Python TUI / CLI manager for scrcpy</b><br>
+  <sub>Device discovery · Profiles · Wireless ADB · Auto-updates · Camera mode</sub>
+</p>
 
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-  - [Interactive TUI](#interactive-tui)
-  - [Command-Line](#command-line)
-  - [Convenience Wrappers](#convenience-wrappers)
-  - [Update Workflow](#update-workflow)
-  - [Programmatic API](#programmatic-api)
-- [First-Time Setup](#first-time-setup)
-- [Device Profiles](#device-profiles)
-- [Network Auto-Discovery](#network-auto-discovery)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
-- [Quality Presets](#quality-presets)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [Directory Structure](#directory-structure)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+[Features](#sparkles-features) · [Installation](#rocket-installation) · [Quick Start](#zap-quick-start) · [Usage](#gear-usage) · [Documentation](#book-documentation) · [Contributing](#handshake-contributing) · [License](#scroll-license)
 
----
-
-## Features
-
-- **Rich Textual TUI** — Live device list, auto-refresh, modal dialogs, hotkeys
-- **Legacy Terminal Menu** — Falls back automatically if Textual is not installed
-- **Network Auto-Discovery** — mDNS-based discovery across all network interfaces (Android 11+)
-- **Wireless ADB Setup Wizard** — One-time USB pairing, then wireless forever
-- **Camera Mode** — Launch device cameras as webcam sources
-- **Quick App Launcher** — Start Android apps directly in mirror or virtual display mode
-- **Device Profiles** — Save nicknames, IPs, serials, quality presets, and per-device settings
-- **Self-Updating Binaries** — Download latest scrcpy/adb from GitHub releases automatically
-- **Graceful Error Handling** — ADB pairing fault auto-retry, Ctrl+C handling throughout
+</div>
 
 ---
 
-## Requirements
-
-- **Windows** (tested on Windows 10/11)
-- **Python 3.9+**
-- **Android device** with USB debugging or Wireless Debugging enabled
-- **Textual** (optional, for TUI): `pip install textual`
+> **Disclaimer:** This is an **unofficial community project**. `scrcpy` is a trademark of [Genymobile](https://github.com/Genymobile). This manager is a separate Python wrapper — it does not modify or distribute scrcpy source code. Pre-built binaries are downloaded directly from official Genymobile/scrcpy GitHub releases under the Apache 2.0 License. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for full attribution.
 
 ---
 
-## Installation
+<!-- You can add a demo GIF / screenshot here:
+<p align="center">
+  <img src="docs/assets/demo.gif" width="800" alt="ScrCtrl TUI Demo" />
+</p>
+-->
 
-### 1. Clone or download this repository
+## :sparkles: Features
+
+| | Feature | Description |
+|---|---|---|
+| :tv: | **Rich Textual TUI** | Live device list, auto-refresh, modal dialogs, hotkeys — or falls back to a clean terminal menu automatically |
+| :satellite: | **Network Auto-Discovery** | mDNS-based discovery across all network interfaces (Android 11+ Wireless Debugging) |
+| :calling: | **Wireless ADB Setup Wizard** | One-time USB pairing, then wireless forever — no cables needed after setup |
+| :camera: | **Camera Mode** | Launch device cameras as webcam sources directly from the menu |
+| :rocket: | **Quick App Launcher** | Start Android apps in mirror or virtual display mode without typing package names |
+| :bookmark_tabs: | **Device Profiles** | Save nicknames, IPs, serials, quality presets, and per-device settings across sessions |
+| :arrows_counterclockwise: | **Self-Updating Binaries** | Download the latest scrcpy / adb releases from GitHub automatically, with backups |
+| :shield: | **Graceful Error Handling** | ADB pairing fault auto-retry, Ctrl+C handling throughout, fault-tolerant mDNS parsing |
+
+---
+
+## :rocket: Installation
+
+### 1. Clone the repository
 
 ```bash
-git clone <repo-url> scrcpy-manager
-cd scrcpy-manager
+git clone https://github.com/mozayed007/scrctrl.git
+cd scrctrl
 ```
 
 ### 2. Download scrcpy binaries
@@ -73,7 +74,7 @@ cd scrcpy-manager
 python scrcpy_cli.py update
 ```
 
-This downloads the latest scrcpy Windows release (including `adb.exe`) into `bin\`.
+This fetches the latest official Windows release (including `adb.exe`) into `bin\`.
 
 ### 3. (Optional) Install Textual for the rich TUI
 
@@ -81,11 +82,11 @@ This downloads the latest scrcpy Windows release (including `adb.exe`) into `bin
 pip install textual
 ```
 
-Without Textual, the manager falls back to a clean `input()`-based menu automatically.
+> Without Textual, the manager automatically falls back to a clean `input()`-based menu — zero hard dependencies.
 
 ---
 
-## Quick Start
+## :zap: Quick Start
 
 ```bash
 # Open the interactive menu (TUI or legacy fallback)
@@ -100,7 +101,7 @@ python scrcpy_cli.py detect
 
 ---
 
-## Usage
+## :gear: Usage
 
 ### Interactive TUI
 
@@ -221,9 +222,11 @@ manager.save_profile(
 
 ---
 
-## First-Time Setup
+## :book: Documentation
 
-### USB Connection (Simplest)
+### First-Time Setup
+
+#### USB Connection (Simplest)
 
 1. Enable **USB Debugging** on your Android device:
    - Settings → About Phone → Tap "Build Number" 7 times
@@ -241,7 +244,7 @@ manager.save_profile(
    # Press the number next to your device
    ```
 
-### Wireless Connection (One-Time Setup)
+#### Wireless Connection (One-Time Setup)
 
 1. Connect via USB first (required for initial pairing)
 2. Run the setup wizard:
@@ -256,7 +259,7 @@ manager.save_profile(
 
 After setup, disconnect the USB cable. The device remains reachable wirelessly.
 
-### Android 11+ Wireless Debugging (No USB Needed)
+#### Android 11+ Wireless Debugging (No USB Needed)
 
 1. Enable **Wireless Debugging** on your device:
    - Settings → Developer Options → **Wireless Debugging** → ON
@@ -269,13 +272,11 @@ After setup, disconnect the USB cable. The device remains reachable wirelessly.
 
 3. Select your device, enter the 6-digit pairing code when prompted, and connect.
 
----
-
-## Device Profiles
+### Device Profiles
 
 Profiles persist device settings across sessions. Stored in `config\devices.ini`.
 
-### Example Profile
+#### Example Profile
 
 ```ini
 [MainPhone]
@@ -288,7 +289,7 @@ keep_active=__YES__
 background_color=#234567
 ```
 
-### Fields
+#### Fields
 
 | Field | Description |
 |-------|-------------|
@@ -300,9 +301,7 @@ background_color=#234567
 | `keep_active` | `__YES__` to prevent sleep during scrcpy |
 | `background_color` | Hex color for window background |
 
----
-
-## Network Auto-Discovery
+### Network Auto-Discovery
 
 When Android devices have **Wireless Debugging** enabled, they advertise themselves via mDNS. The `[F] Find/Discover` feature finds them instantly across **all connected network interfaces**.
 
@@ -322,11 +321,9 @@ Already paired devices:
 
 **Requirements:** Android 11+, device and PC on the same network.
 
----
+### Keyboard Shortcuts
 
-## Keyboard Shortcuts
-
-### Textual TUI
+#### Textual TUI
 
 | Key | Action |
 |-----|--------|
@@ -342,7 +339,7 @@ Already paired devices:
 | `X` | Shutdown ADB |
 | `Q` | Quit |
 
-### Legacy Terminal Menu
+#### Legacy Terminal Menu
 
 | Key | Action |
 |-----|--------|
@@ -356,9 +353,7 @@ Already paired devices:
 | `R` | Refresh |
 | `Q` | Quit |
 
----
-
-## Quality Presets
+### Quality Presets
 
 | Preset | Bitrate | FPS | Buffer | Resolution |
 |--------|---------|-----|--------|------------|
@@ -370,9 +365,7 @@ Already paired devices:
 | `camera_balanced` | 4M | 30 | 40 | 1280x720 |
 | `camera_high` | 8M | 30 | 30 | 1920x1080 |
 
----
-
-## Configuration
+### Configuration
 
 User-specific config lives in `config\` and is **not** tracked by git:
 
@@ -392,42 +385,43 @@ quick_launch_timeout=3
 
 Set `quick_launch_timeout=0` to disable the quick-launch prompt at startup.
 
----
-
-## Architecture
+### Architecture
 
 The codebase is split into four clean layers:
 
-| File | Responsibility |
-|------|---------------|
-| `scrcpy_manager.py` | **Pure library** — `ScrcpyManager`, `Device`, ADB wrappers, INI persistence |
-| `scrcpy_legacy_menu.py` | **Terminal menus** — `input()`-based interactive menus (extends `ScrcpyManager`) |
-| `scrcpy_tui.py` | **Textual TUI** — Rich terminal interface with screens, widgets, and bindings |
-| `scrcpy_cli.py` | **CLI entry point** — `argparse`, `main()`, command router, update workflow |
+```
+┌─────────────────────────────────────────┐
+│  scrcpy_cli.py   │  CLI entry point    │
+│  scrcpy_tui.py   │  Textual TUI        │
+│  scrcpy_legacy_menu.py │ Terminal menus │
+├─────────────────────────────────────────┤
+│  scrcpy_manager.py │  Pure library      │
+│  · ScrcpyManager, Device, ADB wrappers │
+│  · INI persistence, auto-updates         │
+└─────────────────────────────────────────┘
+```
 
 This separation means:
 - The TUI imports only the library, never menu code
 - The CLI decides between TUI and legacy menu at runtime
 - Your own scripts can import `ScrcpyManager` without dragging in UI code
 
----
-
-## Directory Structure
+### Directory Structure
 
 ```
-scrcpy-manager/
-├── scrcpy_cli.py          ← CLI entry point
-├── scrcpy_manager.py      ← Pure library
-├── scrcpy_legacy_menu.py  ← Terminal menus
-├── scrcpy_tui.py          ← Textual TUI
-├── scrcpy-menu.py         ← Convenience wrapper
+scrctrl/
+├── scrcpy_cli.py              # CLI entry point
+├── scrcpy_manager.py          # Pure library
+├── scrcpy_legacy_menu.py      # Terminal menus
+├── scrcpy_tui.py              # Textual TUI
+├── scrcpy-menu.py             # Convenience wrapper
 ├── README.md
-├── LICENSE                ← MIT
+├── LICENSE                    # MIT
 ├── .gitignore
 ├── bin/
-│   ├── .gitkeep           ← Preserves directory in git
-│   ├── icon.png           ← Custom icon (preserved on update)
-│   └── scrcpy.exe, adb.exe, *.dll  ← Downloaded via update
+│   ├── .gitkeep               # Preserves directory in git
+│   ├── icon.png               # Custom icon (preserved on update)
+│   └── scrcpy.exe, adb.exe, *.dll  # Downloaded via update
 ├── scripts/
 │   ├── scrcpy-menu.py
 │   ├── scrcpy-quick.py
@@ -440,18 +434,16 @@ scrcpy-manager/
 │   ├── scrcpy-launch.py
 │   ├── scrcpy-quickapp.py
 │   └── scrcpy-update.py
-├── config/                ← User data (gitignored)
+├── config/                    # User data (gitignored)
 │   ├── devices.ini
 │   ├── quality.ini
 │   ├── lastused.ini
 │   └── userprefs.ini
-└── legacy/                ← Backups & old scripts (gitignored)
+└── legacy/                    # Backups & old scripts (gitignored)
     └── bin-vX.X-backup/
 ```
 
----
-
-## Troubleshooting
+### Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -466,15 +458,56 @@ scrcpy-manager/
 
 ---
 
-## License
+## :wrench: Built With
+
+- [scrcpy](https://github.com/Genymobile/scrcpy) — Android screen mirroring & control
+- [Textual](https://github.com/Textualize/textual) — Python TUI framework
+- [adb](https://developer.android.com/studio/releases/platform-tools) — Android Debug Bridge
+- Python 3.9+
+
+---
+
+## :handshake: Contributing
+
+Contributions are welcome! Whether it's bug reports, feature ideas, or pull requests — feel free to open an [issue](https://github.com/mozayed007/scrctrl/issues) or submit a PR.
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Commit your changes: `git commit -m "feat: add awesome feature"`
+4. Push to the branch: `git push origin feat/my-feature`
+5. Open a Pull Request
+
+Please keep code style consistent with the existing codebase and add comments for non-trivial logic.
+
+---
+
+## :star: Show Your Support
+
+If you find this project useful, please consider giving it a :star: on GitHub — it helps others discover it!
+
+<a href="https://github.com/mozayed007/scrctrl/stargazers">
+  <img src="https://reporanger.com/badge/mozayed007/scrctrl" alt="Stargazers" />
+</a>
+
+---
+
+## :scroll: License
 
 This manager (Python code) is licensed under the **MIT License** — see [LICENSE](LICENSE).
 
 Third-party binaries (`scrcpy.exe`, `adb.exe`, SDL3, FFmpeg, dav1d) are downloaded from the official [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) releases and are licensed under their respective terms. See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) and [NOTICE](NOTICE) for full attribution.
 
-- scrcpy & adb: Apache 2.0 ([licenses/scrcpy-LICENSE](licenses/scrcpy-LICENSE))
-- SDL3: zlib License
-- FFmpeg: LGPL 2.1+ / GPL 2+
-- dav1d: BSD 2-Clause
+| Component | License | File |
+|-----------|---------|------|
+| scrcpy & adb | Apache 2.0 | [licenses/scrcpy-LICENSE](licenses/scrcpy-LICENSE) |
+| SDL3 | zlib License | — |
+| FFmpeg | LGPL 2.1+ / GPL 2+ | — |
+| dav1d | BSD 2-Clause | — |
 
 Copyright (c) 2026 Scrcpy Device Manager Contributors.
+
+---
+
+<div align="center">
+  <sub>Built with :heart: by <a href="https://github.com/mozayed007">mozayed007</a> & <a href="https://github.com/mozayed007/scrctrl/graphs/contributors">contributors</a></sub>
+</div>
