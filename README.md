@@ -281,7 +281,7 @@ Profiles persist device settings across sessions. Stored in `config\devices.ini`
 [MainPhone]
 nickname=Main Phone
 ip=192.168.1.31
-serial=aff170d0
+serial=EXAMPLE1234
 quality=balanced
 mode=mirror
 keep_active=__YES__

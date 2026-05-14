@@ -953,7 +953,7 @@ class ScrcpyManager:
                 continue
 
             # Format: device_name service_type ip:port
-            # Example: adb-RFAR9134C1M-lzUn3r _adb-tls-connect._tcp. 192.168.0.176:44845
+            # Example: adb-EXAMPLE123-lzUn3r _adb-tls-connect._tcp. 192.168.0.176:44845
             device_name = parts[0]
             service_type = parts[1].rstrip(".") if len(parts) > 1 else "_adb._tcp"
             ipport = parts[2] if len(parts) > 2 else ""
