@@ -1,220 +1,110 @@
-# Scrcpy Device Manager v4.0
+# Scrcpy Device Manager
 
-A unified, menu-driven Python interface for managing Android devices with scrcpy v4.0.
+A unified, menu-driven Python interface for managing Android devices with [scrcpy](https://github.com/Genymobile/scrcpy).
 
-## Quick Start
+![Python 3](https://img.shields.io/badge/python-3-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-1. **Main TUI**: Run `python scrcpy_cli.py menu` — launches the rich Textual interface
-2. **Quick Launch**: Run `python scrcpy_cli.py quick` (connects to last device)
-3. **Auto-Discover**: Press `[F]` in the TUI to find devices automatically across all networks
-4. **Setup Wireless**: Run `python scrcpy_cli.py setup` to enable wireless ADB
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Interactive TUI](#interactive-tui)
+  - [Command-Line](#command-line)
+  - [Convenience Wrappers](#convenience-wrappers)
+  - [Update Workflow](#update-workflow)
+  - [Programmatic API](#programmatic-api)
+- [First-Time Setup](#first-time-setup)
+- [Device Profiles](#device-profiles)
+- [Network Auto-Discovery](#network-auto-discovery)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Quality Presets](#quality-presets)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Directory Structure](#directory-structure)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Features
+
+- **Rich Textual TUI** — Live device list, auto-refresh, modal dialogs, hotkeys
+- **Legacy Terminal Menu** — Falls back automatically if Textual is not installed
+- **Network Auto-Discovery** — mDNS-based discovery across all network interfaces (Android 11+)
+- **Wireless ADB Setup Wizard** — One-time USB pairing, then wireless forever
+- **Camera Mode** — Launch device cameras as webcam sources
+- **Quick App Launcher** — Start Android apps directly in mirror or virtual display mode
+- **Device Profiles** — Save nicknames, IPs, serials, quality presets, and per-device settings
+- **Self-Updating Binaries** — Download latest scrcpy/adb from GitHub releases automatically
+- **Graceful Error Handling** — ADB pairing fault auto-retry, Ctrl+C handling throughout
+
+---
 
 ## Requirements
 
-- **Python 3** on Windows
+- **Windows** (tested on Windows 10/11)
+- **Python 3.9+**
 - **Android device** with USB debugging or Wireless Debugging enabled
 - **Textual** (optional, for TUI): `pip install textual`
 
-## Python Interface
+---
 
-### Main entry point (`scrcpy_cli.py`)
+## Installation
 
-- `python scrcpy_cli.py` - opens the interactive menu (TUI or legacy fallback)
-- `python scrcpy_cli.py menu` - same as above
-- `python scrcpy_cli.py quick` - quick-launch last used device
-- `python scrcpy_cli.py quick [ProfileName]` - quick-launch a specific profile
-- `python scrcpy_cli.py launch MainPhone` - launch a saved profile directly
-- `python scrcpy_cli.py detect` - list connected devices
-- `python scrcpy_cli.py discover` - find wireless-debuggable devices via mDNS
-- `python scrcpy_cli.py setup` - run wireless setup over USB
-- `python scrcpy_cli.py camera` - launch camera mode
-- `python scrcpy_cli.py quickapp` - launch an app with scrcpy
-- `python scrcpy_cli.py profiles` - manage saved profiles
-- `python scrcpy_cli.py shutdown` - disconnect devices and stop adb
-- `python scrcpy_cli.py update` - update scrcpy/adb from latest GitHub release
+### 1. Clone or download this repository
 
-### Convenience wrappers
+```bash
+git clone <repo-url> scrcpy-manager
+cd scrcpy-manager
+```
 
-- `python scrcpy-menu.py` — same as `scrcpy_cli.py menu`
-- `python scripts\scrcpy-menu.py`
-- `python scripts\scrcpy-quick.py`
-- `python scripts\scrcpy-setup.py`
-- `python scripts\scrcpy-detect.py`
-- `python scripts\scrcpy-discover.py`
-- `python scripts\scrcpy-camera.py`
-- `python scripts\scrcpy-profile.py`
-- `python scripts\scrcpy-quickapp.py`
-- `python scripts\scrcpy-shutdown.py`
-- `python scripts\scrcpy-launch.py <ProfileName>`
-- `python scripts\scrcpy-update.py` — check for and install scrcpy updates
+### 2. Download scrcpy binaries
 
-### Notes
+```bash
+python scrcpy_cli.py update
+```
 
-- Uses the same `config\devices.ini`, `config\quality.ini`, `config\lastused.ini`, and `config\userprefs.ini`
-- Uses the bundled `bin\adb.exe` and `bin\scrcpy.exe`
-- Requires Python 3 on Windows
+This downloads the latest scrcpy Windows release (including `adb.exe`) into `bin\`.
 
-## Textual TUI (Rich Terminal Interface)
-
-The manager now includes a **Textual**-powered TUI when you run `python scrcpy_cli.py menu` (or `python scrcpy-menu.py`).
-
-### TUI Features
-
-- **Live device list** — Auto-refreshes every 3 seconds
-- **Saved profiles panel** — Browse and launch profiles with Enter or click
-- **Action buttons** — All major features accessible via buttons or hotkeys
-- **Modal dialogs** — Profile editor, pairing, camera setup, quick app launcher
-- **Keyboard shortcuts** — `L` quick launch, `F` discover, `S` setup, `C` camera, `P` quick app, `A` profiles, `R` refresh, `X` shutdown, `Q` quit
-
-### Installing Textual
+### 3. (Optional) Install Textual for the rich TUI
 
 ```bash
 pip install textual
 ```
 
-If Textual is not installed, the manager falls back to the legacy `input()` terminal menu automatically.
+Without Textual, the manager falls back to a clean `input()`-based menu automatically.
 
-## Network Auto-Discovery (Android 11+)
+---
 
-**No need to type IP addresses! Works across ALL your networks!**
-
-When your Android devices have **Wireless Debugging** enabled, they advertise themselves on the network. The `[F] Find/Discover` feature uses **mDNS** to find them instantly - across **all connected networks** (Ethernet, WiFi, multiple adapters).
-
-### How to Use
-
-1. Enable **Wireless Debugging** on your tablet/phone:
-   - Settings → Developer Options → **Wireless Debugging** → ON
-   - (Android 11+ required)
-
-2. On PC, run `python scrcpy_cli.py menu` and press **`[F]`**
-
-3. You'll see discovered devices from ALL networks:
-   ```
-   Scanning across 2 network interfaces...
-
-   FOUND 2 DEVICE(s)
-
-   [1] Pixel-8
-       Address: 192.168.1.45:42047
-       Source: mDNS
-
-   [2] Galaxy-Tab-S9
-       Address: 10.0.0.52:5555
-       Source: Scan
-   ```
-
-4. Press **`[1]`** or **`[2]`** to connect, or **`[S]`** to save to profiles
-
-### Multi-Network Support
-
-**Works with your setup (Ethernet + Ethernet 2):**
-- Automatically scans ALL active network interfaces
-- Finds devices on any connected subnet
-- Shows which network each device was found on
-- No configuration needed - detects your networks automatically
-
-### Discovery Methods
-
-| Method | Speed | Networks | When Used |
-|--------|-------|----------|-----------|
-| **mDNS** | Instant (<1s) | All | Primary - Android 11+ devices advertise automatically |
-| **Network Scan** | ~3 seconds | All detected | Fallback - scans common ports on all subnets |
-
-### Requirements
-- **Android 11 or newer** (your Android 13-16 devices work perfectly)
-- Device and PC on **same network** (any Ethernet or WiFi)
-- **Wireless Debugging** enabled on device
-
-### Manual Alternative
-If auto-discovery doesn't find your device:
-- **`[S]` Setup Wireless** - Manual IP entry with USB first time
-- Run `python scrcpy_cli.py discover` for dedicated discovery window
-- Or manually: `bin\adb connect 192.168.1.XX:5555`
-
-## Directory Structure
-
-```
-F:\utils\scrcpy\
-├── scrcpy_cli.py         ← CLI entry point (argparse + main())
-├── scrcpy_manager.py     ← Pure library (ScrcpyManager, Device, ADB/INI helpers)
-├── scrcpy_legacy_menu.py ← Legacy terminal menus (input()-based)
-├── scrcpy_tui.py         ← Textual TUI (rich terminal interface)
-├── scrcpy-menu.py        ← Wrapper: opens interactive menu
-├── README.md             ← This file
-├── bin\                  ← Executables and DLLs (scrcpy v4.0)
-│   ├── scrcpy.exe, adb.exe
-│   ├── SDL3.dll, *.dll
-│   └── scrcpy-server
-├── scripts\              ← Python script wrappers
-│   ├── scrcpy-menu.py
-│   ├── scrcpy-quick.py
-│   ├── scrcpy-discover.py
-│   ├── scrcpy-setup.py
-│   ├── scrcpy-camera.py
-│   ├── scrcpy-profile.py
-│   ├── scrcpy-detect.py
-│   ├── scrcpy-shutdown.py
-│   ├── scrcpy-launch.py
-│   ├── scrcpy-quickapp.py
-│   └── scrcpy-update.py
-├── config\               ← Configuration files
-│   ├── devices.ini
-│   ├── quality.ini
-│   ├── lastused.ini
-│   └── userprefs.ini
-├── legacy\               ← Old scripts and backups
-│   ├── scrcpy-wireless-setup.bat
-│   ├── camera-*.bat
-│   └── bin-v3.3.4-backup\  ← Previous scrcpy binaries
-└── .vscode\              (if using VS Code)
-```
-
-## Update scrcpy / adb
-
-The manager can automatically download and install the latest scrcpy release (which includes adb) from GitHub:
+## Quick Start
 
 ```bash
-# Check for updates and install if newer
-python scrcpy_cli.py update
+# Open the interactive menu (TUI or legacy fallback)
+python scrcpy_cli.py menu
 
-# Force reinstall even if already on latest
-python scrcpy_cli.py update --force
+# Quick-launch the last used device
+python scrcpy_cli.py quick
 
-# Skip backup of current binaries
-python scrcpy_cli.py update --no-backup
-
-# Also upgrade Python packages (textual)
-python scrcpy_cli.py update --python-deps
+# List connected ADB devices
+python scrcpy_cli.py detect
 ```
 
-**What it does:**
-1. Queries the [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) GitHub API for the latest release
-2. Compares with your current `bin\scrcpy.exe` version
-3. Downloads the Windows 64-bit zip (`scrcpy-win64-vX.X.X.zip`)
-4. Backs up your current `bin\` folder to `legacy\bin-v{version}-backup\`
-5. Extracts and replaces all binaries
-6. Preserves custom files like `bin\icon.png`
-7. Verifies the new installation
+---
 
-## Main Scripts (in scripts\ folder)
+## Usage
 
-| Script | Purpose |
-|--------|---------|
-| `scripts\scrcpy-menu.py` | Main TUI with device selection, profiles, and all features |
-| `scripts\scrcpy-quick.py` | Direct quick-launch to last used device |
-| `scripts\scrcpy-quickapp.py` | Launch specific apps directly (v4.0 feature) |
-| `scripts\scrcpy-discover.py` | **Auto-discover Android devices on network (mDNS)** |
-| `scripts\scrcpy-setup.py` | Wireless ADB setup wizard with profile saving |
-| `scripts\scrcpy-camera.py` | Unified camera mode launcher |
-| `scripts\scrcpy-profile.py` | Manage device profiles (add/edit/delete) |
-| `scripts\scrcpy-detect.py` | Scan and display connected devices |
-| `scripts\scrcpy-shutdown.py` | Disconnect all and kill ADB server |
-| `scripts\scrcpy-launch.py` | Internal: Launch scrcpy with profile settings |
-| `scripts\scrcpy-update.py` | Update scrcpy / adb from GitHub releases |
+### Interactive TUI
 
-## Keyboard Shortcuts (Textual TUI)
-
-When running `python scrcpy_cli.py menu` with Textual installed:
+```bash
+python scrcpy_cli.py menu
+```
 
 | Key | Action |
 |-----|--------|
@@ -230,36 +120,164 @@ When running `python scrcpy_cli.py menu` with Textual installed:
 | `X` | Shutdown ADB server |
 | `Q` | Quit |
 
-## Keyboard Shortcuts (Legacy Terminal Menu)
+### Command-Line
 
-When running without Textual (fallback mode):
+```bash
+# Launch a saved profile
+python scrcpy_cli.py launch MainPhone
 
+# Find wireless-debuggable devices
+python scrcpy_cli.py discover
+
+# Run wireless setup over USB
+python scrcpy_cli.py setup
+
+# Launch camera mode
+python scrcpy_cli.py camera
+
+# Launch an app
+python scrcpy_cli.py quickapp
+
+# Manage profiles
+python scrcpy_cli.py profiles
+
+# Disconnect everything
+python scrcpy_cli.py shutdown
 ```
-[1-9]  Select device or profile directly
-[L]    Quick Launch (last device, 3s timeout)
-[A]    Add/Edit Device Profile
-[D]    Detect connected devices
-[F]    Find/Discover network devices (mDNS auto-discovery)
-[S]    Setup wireless device
-[C]    Camera mode
-[R]    Refresh list
-[Q]    Quit
+
+### Convenience Wrappers
+
+Each subcommand has a thin wrapper in `scripts\`:
+
+| Wrapper | Equivalent |
+|---------|-----------|
+| `python scrcpy-menu.py` | `scrcpy_cli.py menu` |
+| `python scripts\scrcpy-quick.py` | `scrcpy_cli.py quick` |
+| `python scripts\scrcpy-detect.py` | `scrcpy_cli.py detect` |
+| `python scripts\scrcpy-discover.py` | `scrcpy_cli.py discover` |
+| `python scripts\scrcpy-setup.py` | `scrcpy_cli.py setup` |
+| `python scripts\scrcpy-camera.py` | `scrcpy_cli.py camera` |
+| `python scripts\scrcpy-quickapp.py` | `scrcpy_cli.py quickapp` |
+| `python scripts\scrcpy-profile.py` | `scrcpy_cli.py profiles` |
+| `python scripts\scrcpy-shutdown.py` | `scrcpy_cli.py shutdown` |
+| `python scripts\scrcpy-launch.py ProfileName` | `scrcpy_cli.py launch ProfileName` |
+| `python scripts\scrcpy-update.py` | `scrcpy_cli.py update` |
+
+### Update Workflow
+
+Automatically download and install the latest scrcpy release from GitHub:
+
+```bash
+# Check for updates and install if newer
+python scrcpy_cli.py update
+
+# Force reinstall even if already on latest
+python scrcpy_cli.py update --force
+
+# Skip backup of current binaries
+python scrcpy_cli.py update --no-backup
+
+# Also upgrade Python packages (textual)
+python scrcpy_cli.py update --python-deps
 ```
 
-## Configuration Files
+What it does:
+1. Queries the [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) GitHub API
+2. Compares with your current `bin\scrcpy.exe` version
+3. Downloads the Windows 64-bit zip (`scrcpy-win64-vX.X.X.zip`)
+4. Backs up `bin\` to `legacy\bin-v{version}-backup\`
+5. Extracts and replaces all binaries
+6. Preserves custom files like `bin\icon.png`
+7. Verifies the new installation
 
-Located in `config\` folder:
+### Programmatic API
 
-- `devices.ini` - Saved device profiles with nicknames, IPs, quality settings
-- `quality.ini` - Quality presets (low/balanced/high/ultra, camera variants)
-- `lastused.ini` - Tracks recently used device for Quick Launch
-- `userprefs.ini` - User preferences (timeouts, defaults)
+Use `ScrcpyManager` directly in your own scripts:
 
-## Device Profile Format
+```python
+from scrcpy_manager import ScrcpyManager
+
+manager = ScrcpyManager()
+
+# List connected devices
+devices = manager.list_devices()
+for d in devices:
+    print(d.display_name, d.serial, d.kind)
+
+# Launch a saved profile
+manager.launch_profile("MainPhone")
+
+# Save a new profile
+manager.save_profile(
+    profile_name="Tablet",
+    nickname="Galaxy Tab",
+    ip="192.168.1.45",
+    quality="high",
+    keep_active="__YES__",
+)
+```
+
+---
+
+## First-Time Setup
+
+### USB Connection (Simplest)
+
+1. Enable **USB Debugging** on your Android device:
+   - Settings → About Phone → Tap "Build Number" 7 times
+   - Settings → Developer Options → **USB Debugging** → ON
+
+2. Connect via USB, then run:
+   ```bash
+   python scrcpy_cli.py detect
+   ```
+   You should see your device listed.
+
+3. Launch it:
+   ```bash
+   python scrcpy_cli.py menu
+   # Press the number next to your device
+   ```
+
+### Wireless Connection (One-Time Setup)
+
+1. Connect via USB first (required for initial pairing)
+2. Run the setup wizard:
+   ```bash
+   python scrcpy_cli.py setup
+   ```
+3. The wizard will:
+   - Detect your device IP automatically
+   - Switch ADB to TCP/IP mode
+   - Connect wirelessly
+   - Offer to save the device as a profile
+
+After setup, disconnect the USB cable. The device remains reachable wirelessly.
+
+### Android 11+ Wireless Debugging (No USB Needed)
+
+1. Enable **Wireless Debugging** on your device:
+   - Settings → Developer Options → **Wireless Debugging** → ON
+
+2. On your PC, run:
+   ```bash
+   python scrcpy_cli.py menu
+   # Press [F] to discover
+   ```
+
+3. Select your device, enter the 6-digit pairing code when prompted, and connect.
+
+---
+
+## Device Profiles
+
+Profiles persist device settings across sessions. Stored in `config\devices.ini`.
+
+### Example Profile
 
 ```ini
-[ProfileID]
-nickname=Display Name
+[MainPhone]
+nickname=Main Phone
 ip=192.168.1.31
 serial=aff170d0
 quality=balanced
@@ -268,62 +286,186 @@ keep_active=__YES__
 background_color=#234567
 ```
 
+### Fields
+
+| Field | Description |
+|-------|-------------|
+| `nickname` | Display name shown in menus |
+| `ip` | IP address for wireless connections |
+| `serial` | USB serial number |
+| `quality` | Preset: `low`, `balanced`, `high`, `ultra` |
+| `mode` | `mirror`, `otg`, or `camera` |
+| `keep_active` | `__YES__` to prevent sleep during scrcpy |
+| `background_color` | Hex color for window background |
+
+---
+
+## Network Auto-Discovery
+
+When Android devices have **Wireless Debugging** enabled, they advertise themselves via mDNS. The `[F] Find/Discover` feature finds them instantly across **all connected network interfaces**.
+
+```
+Network Device Discovery
+
+Devices requiring pairing (Android 11+):
+[1] Pixel-8
+    Address: 192.168.1.45:42047
+    Type:    Pairing required
+
+Already paired devices:
+[2] Galaxy-Tab-S9
+    Address: 10.0.0.52:5555
+    Type:    Ready to connect
+```
+
+**Requirements:** Android 11+, device and PC on the same network.
+
+---
+
+## Keyboard Shortcuts
+
+### Textual TUI
+
+| Key | Action |
+|-----|--------|
+| `Enter` / Click | Launch selected device or profile |
+| `L` | Quick Launch |
+| `A` | Profile Manager |
+| `D` | Detect devices |
+| `F` | Discover wireless devices |
+| `S` | Setup wireless |
+| `C` | Camera mode |
+| `P` | Quick App Launcher |
+| `R` | Refresh |
+| `X` | Shutdown ADB |
+| `Q` | Quit |
+
+### Legacy Terminal Menu
+
+| Key | Action |
+|-----|--------|
+| `[1-9]` | Select device or profile directly |
+| `L` | Quick Launch (last device) |
+| `A` | Profile Manager |
+| `D` | Detect devices |
+| `F` | Discover devices (mDNS) |
+| `S` | Setup wireless |
+| `C` | Camera mode |
+| `R` | Refresh |
+| `Q` | Quit |
+
+---
+
 ## Quality Presets
 
 | Preset | Bitrate | FPS | Buffer | Resolution |
 |--------|---------|-----|--------|------------|
-| low | 2M | 30 | 60 | native |
-| balanced | 8M | 60 | 40 | native |
-| high | 12M | 60 | 30 | 1920x1080 |
-| ultra | 32M | 120 | 20 | 2560x1440 |
-| camera_low | 2M | 30 | 60 | 640x480 |
-| camera_balanced | 4M | 30 | 40 | 1280x720 |
-| camera_high | 8M | 30 | 30 | 1920x1080 |
+| `low` | 2M | 30 | 60 | native |
+| `balanced` | 8M | 60 | 40 | native |
+| `high` | 12M | 60 | 30 | 1920x1080 |
+| `ultra` | 32M | 120 | 20 | 2560x1440 |
+| `camera_low` | 2M | 30 | 60 | 640x480 |
+| `camera_balanced` | 4M | 30 | 40 | 1280x720 |
+| `camera_high` | 8M | 30 | 30 | 1920x1080 |
 
-## Window Titles
+---
 
-scrcpy windows now show: `scrcpy - Nickname (Connection Type)`
-- Example: `scrcpy - Main Phone (Wireless)`
-- Example: `scrcpy - Work Phone (USB)`
-- Example: `scrcpy - Tablet (Camera Mode)`
+## Configuration
 
-## New Features in v4.0
+User-specific config lives in `config\` and is **not** tracked by git:
 
-- **Textual TUI**: Rich terminal interface with live device list, profile management, and modal dialogs (optional `pip install textual`)
-- **SDL3 Upgrade**: Faster, smoother rendering with SDL3 (was SDL2)
-- **Flex Display**: Dynamic virtual display resizing with `--flex-display`
-- **Keep Active**: Prevent device sleep during scrcpy with `--keep-active`
-- **Background Color**: Customize window background via `--background-color`
-- **Camera Torch**: Turn on camera flashlight at startup with `--camera-torch`
-- **Camera Zoom**: Set initial camera zoom level with `--camera-zoom`
-- **Aspect Ratio Lock**: Disable with `--no-window-aspect-ratio-lock` for free resizing
-- **F11 / Mod+q Shortcuts**: Improved fullscreen and quit shortcuts
-- **ADB 37.0.0**: Latest platform-tools bundled
-- **FFmpeg 8.1.1**: Updated codec support
+| File | Purpose |
+|------|---------|
+| `devices.ini` | Saved device profiles |
+| `quality.ini` | Quality preset definitions |
+| `lastused.ini` | Recently used device for Quick Launch |
+| `userprefs.ini` | User preferences (timeouts, defaults) |
 
-## Legacy Files
+Example `userprefs.ini`:
 
-Old scripts are backed up in `legacy\` folder:
-- Original batch scripts (`*.bat`)
-- Original `scrcpy-wireless-setup.bat`
-- Original `scrcpy-wireless-connect.bat`
-- Original camera scripts
-- Original `config.txt` (migrated to `devices.ini`)
-- `bin-v3.3.4-backup\` - Previous scrcpy binaries (rollback available)
+```ini
+[preferences]
+quick_launch_timeout=3
+```
+
+Set `quick_launch_timeout=0` to disable the quick-launch prompt at startup.
+
+---
+
+## Architecture
+
+The codebase is split into four clean layers:
+
+| File | Responsibility |
+|------|---------------|
+| `scrcpy_manager.py` | **Pure library** — `ScrcpyManager`, `Device`, ADB wrappers, INI persistence |
+| `scrcpy_legacy_menu.py` | **Terminal menus** — `input()`-based interactive menus (extends `ScrcpyManager`) |
+| `scrcpy_tui.py` | **Textual TUI** — Rich terminal interface with screens, widgets, and bindings |
+| `scrcpy_cli.py` | **CLI entry point** — `argparse`, `main()`, command router, update workflow |
+
+This separation means:
+- The TUI imports only the library, never menu code
+- The CLI decides between TUI and legacy menu at runtime
+- Your own scripts can import `ScrcpyManager` without dragging in UI code
+
+---
+
+## Directory Structure
+
+```
+scrcpy-manager/
+├── scrcpy_cli.py          ← CLI entry point
+├── scrcpy_manager.py      ← Pure library
+├── scrcpy_legacy_menu.py  ← Terminal menus
+├── scrcpy_tui.py          ← Textual TUI
+├── scrcpy-menu.py         ← Convenience wrapper
+├── README.md
+├── LICENSE                ← MIT
+├── .gitignore
+├── bin/
+│   ├── .gitkeep           ← Preserves directory in git
+│   ├── icon.png           ← Custom icon (preserved on update)
+│   └── scrcpy.exe, adb.exe, *.dll  ← Downloaded via update
+├── scripts/
+│   ├── scrcpy-menu.py
+│   ├── scrcpy-quick.py
+│   ├── scrcpy-detect.py
+│   ├── scrcpy-discover.py
+│   ├── scrcpy-setup.py
+│   ├── scrcpy-camera.py
+│   ├── scrcpy-profile.py
+│   ├── scrcpy-shutdown.py
+│   ├── scrcpy-launch.py
+│   ├── scrcpy-quickapp.py
+│   └── scrcpy-update.py
+├── config/                ← User data (gitignored)
+│   ├── devices.ini
+│   ├── quality.ini
+│   ├── lastused.ini
+│   └── userprefs.ini
+└── legacy/                ← Backups & old scripts (gitignored)
+    └── bin-vX.X-backup/
+```
+
+---
 
 ## Troubleshooting
 
-1. **Device not found**: Run `python scrcpy_cli.py detect` to check ADB connection
-2. **Wireless fails**: Re-run `python scrcpy_cli.py setup` to re-enable TCP/IP mode
-3. **Camera mode fails**: Requires Android 12+; use `bin\scrcpy --list-cameras` to verify
-4. **Quick Launch timeout**: Edit `config\userprefs.ini` and set `quick_launch_timeout=0` to disable
-5. **Pairing fails with protocol fault**: The manager now auto-restarts ADB server and retries once
-6. **TUI won't start / looks plain**: Install Textual with `pip install textual`. Without it, the manager falls back to a simple text menu automatically.
+| Issue | Solution |
+|-------|----------|
+| **Device not found** | Run `python scrcpy_cli.py detect`. Check USB debugging is enabled. |
+| **Wireless fails** | Re-run `python scrcpy_cli.py setup` to re-enable TCP/IP mode. |
+| **Camera mode fails** | Requires Android 12+. Run `bin\scrcpy --list-cameras` to verify. |
+| **Quick Launch timeout** | Edit `config\userprefs.ini`: `quick_launch_timeout=0` |
+| **Pairing protocol fault** | Manager auto-restarts ADB server and retries once. |
+| **TUI looks plain / won't start** | Install Textual: `pip install textual`. Falls back to text menu without it. |
+| **No scrcpy.exe found** | Run `python scrcpy_cli.py update` to download binaries. |
+| **Legacy menu stuck** | Press `Ctrl+C` — all interactive paths handle `KeyboardInterrupt`. |
 
-## Migration from Old Scripts
+---
 
-Your old `config.txt` is automatically migrated on first run:
-- IP address → MainPhone profile
-- Quality settings → Proper presets (legacy Y/N mapped to balanced/high)
+## License
 
-After migration, `config.txt` is renamed to `config.txt.migrated`.
+MIT License — see [LICENSE](LICENSE).
+
+Copyright (c) 2026 Scrcpy Device Manager Contributors.
