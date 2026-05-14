@@ -1,0 +1,3 @@
+# Placeholder to preserve the bin/ directory in git.
+# Download scrcpy/adb binaries here, or run:
+#   python scrcpy_cli.py update
