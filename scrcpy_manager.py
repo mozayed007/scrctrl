@@ -307,7 +307,7 @@ class ScrcpyManager:
             ConfigParser instance with loaded configuration
         """
         parser = configparser.ConfigParser(interpolation=None)
-        parser.optionxform = str
+        parser.optionxform = str  # type: ignore[method-assign,assignment]
         parser.read(path, encoding="utf-8")
         return parser
 

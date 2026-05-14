@@ -265,7 +265,7 @@ def check_updates_silent() -> str | None:
             latest_tuple = parse_version_tag(tag_name)
             if current_tuple and latest_tuple and current_tuple >= latest_tuple:
                 return None
-        return tag_name
+        return str(tag_name)
     except Exception:
         return None
 
@@ -356,9 +356,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "profiles":
         return manager.profiles_menu()
     if command == "quick":
-        return manager.quick_launch(args.profile)
+        return manager.quick_launch(args.profile)  # type: ignore[return-value]
     if command == "launch":
-        return manager.launch_profile(args.profile)
+        return manager.launch_profile(args.profile)  # type: ignore[return-value]
     if command == "update":
         return update_scrcpy(
             force=args.force,

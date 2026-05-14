@@ -154,7 +154,7 @@ class LegacyMenu(ScrcpyManager):
                     profile_name,
                     connection=connected_serial,
                     connection_type="wireless",
-                )
+                )  # type: ignore[return-value]
             temp_profile = {
                 "name": sanitize_profile_name(selected.name),
                 "nickname": selected.name,
@@ -171,7 +171,7 @@ class LegacyMenu(ScrcpyManager):
                 connection_type="wireless",
             )
             print()
-            return self.scrcpy(args)
+            return self.scrcpy(args)  # type: ignore[return-value]
         except KeyboardInterrupt:
             print("\n")
             return 0
@@ -286,7 +286,7 @@ class LegacyMenu(ScrcpyManager):
             args.append(f"--camera-size={settings['resolution']}")
         args.extend(["--window-title", f"scrcpy - {selected.display_name} (Camera Mode)"])
         print(f"\nCommand: {quote_command(args)}\n")
-        return self.scrcpy(args)
+        return self.scrcpy(args)  # type: ignore[return-value]
 
     def quick_app(self) -> int:
         """Launch an app on a connected device with scrcpy.
@@ -342,7 +342,7 @@ class LegacyMenu(ScrcpyManager):
                 args.append("--flex-display")
         args.extend(["--window-title", f"scrcpy - {selected.display_name} ({package_name})"])
         print(f"\nCommand: {quote_command(args)}\n")
-        return self.scrcpy(args)
+        return self.scrcpy(args)  # type: ignore[return-value]
 
     def profiles_menu(self) -> int:
         """Interactive menu for managing device profiles.
@@ -501,7 +501,7 @@ class LegacyMenu(ScrcpyManager):
                 print(f"Last profile:    {last_profile}")
                 print(f"Last connection: {last_conn}")
                 if prompt_yes_no("Launch last used device now", default=False):
-                    return self.quick_launch()
+                    return self.quick_launch()  # type: ignore[return-value]
 
         while True:
             clear_screen()
