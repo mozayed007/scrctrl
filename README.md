@@ -509,5 +509,5 @@ Copyright (c) 2026 Scrcpy Device Manager Contributors.
 ---
 
 <div align="center">
-  <sub>Built with :heart: by <a href="https://github.com/mozayed007">mozayed007</a> & <a href="https://github.com/mozayed007/scrctrl/graphs/contributors">contributors</a></sub>
+  <sub>Built with :heart: by <a href="https://github.com/mozayed007">mozayed007</a>, Kilo (Kimi K2.6 Turbo — Fireworks AI), & <a href="https://github.com/mozayed007/scrctrl/graphs/contributors">contributors</a></sub>
 </div>
