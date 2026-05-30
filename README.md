@@ -53,9 +53,12 @@
 | :calling: | **Wireless ADB Setup Wizard** | One-time USB pairing, then wireless forever - no cables needed after setup |
 | :camera: | **Camera Mode** | Launch device cameras as webcam sources directly from the menu |
 | :rocket: | **Quick App Launcher** | Start Android apps in mirror or virtual display mode without typing package names |
-| :bookmark_tabs: | **Device Profiles** | Save nicknames, IPs, serials, quality presets, and per-device settings across sessions |
+| :bookmark_tabs: | **Device Profiles** | Save nicknames, IPs, serials, quality presets, video/audio codecs, orientation, flex display, and recording settings across sessions |
 | :arrows_counterclockwise: | **Self-Updating Binaries** | Download the latest scrcpy / adb releases from GitHub automatically, with backups |
 | :shield: | **Graceful Error Handling** | ADB pairing fault auto-retry, Ctrl+C handling throughout, fault-tolerant mDNS parsing |
+| :gear: | **Streaming Customization** | Per-profile video codec (H264/H265/AV1), audio codec (Opus/AAC/FLAC/RAW), render fit, and orientation |
+| :desktop_computer: | **Virtual Display & Flex** | Create new virtual displays with `--new-display` and `--flex-display` for responsive resizable windows |
+| :film_strip: | **Recording** | Auto-record every session via profile settings with configurable format (MP4/MKV/FLAC/OPUS/...) |
 
 ---
 
@@ -83,6 +86,20 @@ pip install textual
 ```
 
 > Without Textual, the manager automatically falls back to a clean `input()`-based menu - zero hard dependencies.
+
+### 4. (Optional) Install as a package
+
+```bash
+pip install -e .
+```
+
+This registers the `scrctrl` command globally, so you can run:
+
+```bash
+scrctrl menu
+scrctrl quick
+scrctrl detect
+```
 
 ---
 
@@ -129,6 +146,12 @@ python scrcpy_cli.py menu
 # Launch a saved profile
 python scrcpy_cli.py launch MainPhone
 
+# Launch with one-off overrides (e.g., H265 for better quality, flex display)
+python scrcpy_cli.py launch MainPhone --video-codec=h265 --flex-display
+python scrcpy_cli.py launch MainPhone --no-control --orientation=90
+python scrcpy_cli.py launch MainPhone --record=session.mp4 --record-format=mp4
+python scrcpy_cli.py launch MainPhone --new-display=1920x1080/160 --flex-display
+
 # Find wireless-debuggable devices
 python scrcpy_cli.py discover
 
@@ -165,6 +188,7 @@ Each subcommand has a thin wrapper in `scripts\`:
 | `python scripts\scrcpy-shutdown.py` | `scrcpy_cli.py shutdown` |
 | `python scripts\scrcpy-launch.py ProfileName` | `scrcpy_cli.py launch ProfileName` |
 | `python scripts\scrcpy-update.py` | `scrcpy_cli.py update` |
+| `scripts\scrcpy-console.bat` | Direct scrcpy with args passthrough |
 
 ### Update Workflow
 
@@ -210,13 +234,20 @@ for d in devices:
 # Launch a saved profile
 manager.launch_profile("MainPhone")
 
-# Save a new profile
+# Save a new profile with modern settings
 manager.save_profile(
     profile_name="Tablet",
     nickname="Galaxy Tab",
     ip="192.168.1.45",
     quality="high",
     keep_active="__YES__",
+    video_codec="h265",
+    audio_codec="opus",
+    audio_source="output",
+    render_fit="letterbox",
+    orientation="0",
+    flex_display="yes",
+    new_display="1920x1080/160",
 )
 ```
 
@@ -283,10 +314,22 @@ Profiles persist device settings across sessions. Stored in `config\devices.ini`
 nickname=Main Phone
 ip=192.168.1.31
 serial=EXAMPLE1234
-quality=balanced
+quality=high
 mode=mirror
 keep_active=__YES__
 background_color=#234567
+video_codec=h265
+audio_codec=opus
+audio_source=output
+render_fit=letterbox
+window_aspect_ratio_lock=yes
+orientation=0
+no_control=no
+power_off_on_close=no
+flex_display=no
+new_display=
+record=
+record_format=
 ```
 
 #### Fields
@@ -300,6 +343,18 @@ background_color=#234567
 | `mode` | `mirror`, `otg`, or `camera` |
 | `keep_active` | `__YES__` to prevent sleep during scrcpy |
 | `background_color` | Hex color for window background |
+| `video_codec` | `h264` (default), `h265` (better quality), `av1` |
+| `audio_codec` | `opus` (default), `aac`, `flac`, `raw` |
+| `audio_source` | `output` (default), `playback`, `mic`, `mic-unprocessed`, ... |
+| `render_fit` | `letterbox` (default), `stretched`, `unscaled` |
+| `window_aspect_ratio_lock` | `yes` (default) or `no` |
+| `orientation` | `0`, `90`, `180`, `270`, `flip0`, `flip90`, `flip180`, `flip270` |
+| `no_control` | `yes` for view-only mode |
+| `power_off_on_close` | `yes` to turn screen off on exit |
+| `flex_display` | `yes` to make virtual display resizable with window |
+| `new_display` | Virtual display spec, e.g. `1920x1080/160` |
+| `record` | File path to auto-record every session |
+| `record_format` | `mp4`, `mkv`, `m4a`, `mka`, `opus`, `aac`, `flac`, `wav` |
 
 ### Network Auto-Discovery
 
@@ -355,15 +410,23 @@ Already paired devices:
 
 ### Quality Presets
 
-| Preset | Bitrate | FPS | Buffer | Resolution |
-|--------|---------|-----|--------|------------|
-| `low` | 2M | 30 | 60 | native |
-| `balanced` | 8M | 60 | 40 | native |
-| `high` | 12M | 60 | 30 | 1920x1080 |
-| `ultra` | 32M | 120 | 20 | 2560x1440 |
-| `camera_low` | 2M | 30 | 60 | 640x480 |
-| `camera_balanced` | 4M | 30 | 40 | 1280x720 |
-| `camera_high` | 8M | 30 | 30 | 1920x1080 |
+Optimized for modern devices and laptops (low latency, high quality, responsive):
+
+| Preset | Bitrate | FPS | Audio Delay | Video Buffer | Resolution | Video Codec | Audio Codec |
+|--------|---------|-----|-------------|--------------|------------|-------------|-------------|
+| `low` | 2M | 30 | 60ms | 50ms | native | h264 | opus |
+| `balanced` | 8M | 60 | 40ms | 30ms | native | h264 | opus |
+| `high` | 12M | 60 | 30ms | 20ms | 1920x1080 | h265 | opus |
+| `ultra` | 32M | 120 | 20ms | 0ms | 2560x1440 | h265 | opus |
+| `camera_low` | 2M | 30 | 60ms | 50ms | 640x480 | - | - |
+| `camera_balanced` | 4M | 30 | 40ms | 30ms | 1280x720 | - | - |
+| `camera_high` | 8M | 30 | 30ms | 20ms | 1920x1080 | - | - |
+
+**Notes for modern hardware:**
+- `h265` on `high`/`ultra` provides better quality at the same bitrate vs `h264`.
+- `audio_delay` is `--audio-buffer` (target buffering). Lower = more responsive; higher = smoother.
+- `video_buffer` is `--video-buffer` (jitter compensation). `0` on `ultra` gives lowest latency.
+- `audio_buffer` (SDL output buffer) is kept at the default `10ms` for all presets.
 
 ### Configuration
 
@@ -413,11 +476,16 @@ scrctrl/
 ├── scrcpy_cli.py              # CLI entry point
 ├── scrcpy_manager.py          # Pure library
 ├── scrcpy_legacy_menu.py      # Terminal menus
-├── scrcpy_tui.py              # Textual TUI
+├── scrcpy_tui.py              # Textual TUI (main app)
+├── scrcpy_tui_screens.py      # Textual TUI modal screens
 ├── scrcpy-menu.py             # Convenience wrapper
 ├── README.md
 ├── LICENSE                    # MIT
 ├── .gitignore
+├── pyproject.toml             # Project metadata & tool config
+├── requirements.txt           # Dependencies
+├── THIRD-PARTY-LICENSES.md    # Third-party attribution
+├── NOTICE                     # Legal notices
 ├── bin/
 │   ├── .gitkeep               # Preserves directory in git
 │   ├── icon.png               # Custom icon (preserved on update)
@@ -433,14 +501,17 @@ scrctrl/
 │   ├── scrcpy-shutdown.py
 │   ├── scrcpy-launch.py
 │   ├── scrcpy-quickapp.py
-│   └── scrcpy-update.py
+│   ├── scrcpy-update.py
+│   └── scrcpy-console.bat     # Direct scrcpy launcher
 ├── config/                    # User data (gitignored)
 │   ├── devices.ini
 │   ├── quality.ini
 │   ├── lastused.ini
 │   └── userprefs.ini
-└── legacy/                    # Backups & old scripts (gitignored)
-    └── bin-vX.X-backup/
+├── licenses/                  # Third-party license files
+├── legacy/                    # Backups & old scripts (gitignored)
+│   └── bin-vX.X-backup/
+└── .github/                   # GitHub workflows & templates
 ```
 
 ### Troubleshooting

@@ -288,6 +288,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     launch = subparsers.add_parser("launch", help="Launch a saved profile")
     launch.add_argument("profile", help="Profile name to launch")
+    launch.add_argument("--video-codec", choices=["h264", "h265", "av1"], help="Override video codec")
+    launch.add_argument("--audio-codec", choices=["opus", "aac", "flac", "raw"], help="Override audio codec")
+    launch.add_argument("--audio-source", choices=["output", "playback", "mic", "mic-unprocessed", "mic-camcorder", "mic-voice-recognition", "mic-voice-communication", "voice-call", "voice-call-uplink", "voice-call-downlink", "voice-performance"], help="Override audio source")
+    launch.add_argument("--render-fit", choices=["letterbox", "stretch", "crop", "auto"], help="Override render fit mode")
+    launch.add_argument("--no-window-aspect-ratio-lock", action="store_true", help="Disable window aspect ratio lock")
+    launch.add_argument("--orientation", choices=["0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270"], help="Override orientation")
+    launch.add_argument("--no-control", action="store_true", help="Disable device control")
+    launch.add_argument("--power-off-on-close", action="store_true", help="Turn device screen off on close")
+    launch.add_argument("--flex-display", action="store_true", help="Enable flex display")
+    launch.add_argument("--new-display", help="Create new display (e.g. 1920x1080/160)")
+    launch.add_argument("--record", help="Record to file path")
+    launch.add_argument("--record-format", choices=["mp4", "mkv", "m4a", "mka", "opus", "aac", "flac", "wav"], help="Force recording format")
 
     update = subparsers.add_parser("update", help="Update scrcpy/adb binaries from GitHub releases")
     update.add_argument("--force", action="store_true", help="Reinstall even if already on latest version")
@@ -295,6 +307,37 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--python-deps", action="store_true", help="Also upgrade Python packages (textual)")
 
     return parser
+
+
+# Mapping from CLI argument name to (scrcpy_flag, is_bool)
+CLI_OVERRIDE_FLAGS: list[tuple[str, str, bool]] = [
+    ("video_codec", "--video-codec", False),
+    ("audio_codec", "--audio-codec", False),
+    ("audio_source", "--audio-source", False),
+    ("render_fit", "--render-fit", False),
+    ("no_window_aspect_ratio_lock", "--no-window-aspect-ratio-lock", True),
+    ("orientation", "--orientation", False),
+    ("no_control", "--no-control", True),
+    ("power_off_on_close", "--power-off-on-close", True),
+    ("flex_display", "--flex-display", True),
+    ("new_display", "--new-display", False),
+    ("record", "--record", False),
+    ("record_format", "--record-format", False),
+]
+
+
+def _build_extra_from_args(args: argparse.Namespace) -> list[str]:
+    """Build extra scrcpy arguments from CLI overrides."""
+    extra: list[str] = []
+    for attr_name, flag, is_bool in CLI_OVERRIDE_FLAGS:
+        value = getattr(args, attr_name, None)
+        if not value:
+            continue
+        if is_bool:
+            extra.append(flag)
+        else:
+            extra.append(f"{flag}={value}")
+    return extra
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -356,9 +399,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if command == "profiles":
         return manager.profiles_menu()
     if command == "quick":
-        return manager.quick_launch(args.profile)  # type: ignore[return-value]
+        extra = _build_extra_from_args(args)
+        return manager.quick_launch(args.profile, extra=extra)  # type: ignore[return-value]
     if command == "launch":
-        return manager.launch_profile(args.profile)  # type: ignore[return-value]
+        extra = _build_extra_from_args(args)
+        return manager.launch_profile(args.profile, extra=extra)  # type: ignore[return-value]
     if command == "update":
         return update_scrcpy(
             force=args.force,

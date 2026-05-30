@@ -344,6 +344,24 @@ class LegacyMenu(ScrcpyManager):
         print(f"\nCommand: {quote_command(args)}\n")
         return self.scrcpy(args)  # type: ignore[return-value]
 
+    def _prompt_profile_fields(self, current: dict[str, str] | None = None) -> dict[str, str]:
+        """Prompt for all profile fields, optionally prefilled from current profile."""
+        from scrcpy_manager import PROFILE_FIELDS, is_profile_bool_yes
+
+        defaults = current or {}
+        fields: dict[str, str] = {}
+        for field in PROFILE_FIELDS:
+            if field.type == "bool":
+                default_val = is_profile_bool_yes(defaults.get(field.name, field.default))
+                fields[field.name] = "yes" if prompt_yes_no(field.label, default=default_val) else ""
+            elif field.type == "choice":
+                default_val = defaults.get(field.name, "")
+                choices_str = "/".join(field.choices)
+                fields[field.name] = prompt(f"{field.label} ({choices_str}, leave empty)", default_val)
+            else:
+                fields[field.name] = prompt(field.label, defaults.get(field.name, field.default))
+        return fields
+
     def profiles_menu(self) -> int:
         """Interactive menu for managing device profiles.
 
@@ -363,6 +381,8 @@ class LegacyMenu(ScrcpyManager):
 
                 if choice == "l":
                     clear_screen()
+                    from scrcpy_manager import PROFILE_FIELDS
+
                     profiles = self.list_profiles()
                     if not profiles:
                         print("No saved profiles.")
@@ -374,32 +394,22 @@ class LegacyMenu(ScrcpyManager):
                             if profile["serial"]:
                                 print(f"    Serial:  {profile['serial']}")
                             print(f"    Quality: {profile['quality']}")
-                            print(f"    Mode:    {profile['mode']}\n")
+                            print(f"    Mode:    {profile['mode']}")
+                            for field in PROFILE_FIELDS:
+                                if field.name in ("nickname", "ip", "serial", "quality", "mode"):
+                                    continue
+                                value = profile.get(field.name, "")
+                                if value:
+                                    print(f"    {field.label}: {value}")
+                            print()
                     press_enter()
                     continue
 
                 if choice == "a":
                     clear_screen()
                     profile_name = sanitize_profile_name(prompt("Profile ID"))
-                    nickname = prompt("Display name", profile_name)
-                    ip = prompt("IP address", "")
-                    serial = prompt("USB serial", "")
-                    quality = prompt("Quality", "balanced")
-                    mode = prompt("Mode", "mirror")
-                    keep_active = (
-                        "__YES__" if prompt_yes_no("Keep device active (prevent sleep)", default=False) else ""
-                    )
-                    background_color = prompt("Background color hex (e.g. #234567, leave empty for default)", "")
-                    self.save_profile(
-                        profile_name=profile_name,
-                        nickname=nickname,
-                        ip=ip,
-                        serial=serial,
-                        quality=quality,
-                        mode=mode,
-                        keep_active=keep_active,
-                        background_color=background_color,
-                    )
+                    fields = self._prompt_profile_fields()
+                    self.save_profile(profile_name, **fields)
                     print(f"\nSaved profile '{profile_name}'.")
                     press_enter()
                     continue
@@ -419,31 +429,8 @@ class LegacyMenu(ScrcpyManager):
                         press_enter()
                         continue
                     current = profiles[int(selected) - 1]
-                    nickname = prompt("Display name", current["nickname"])
-                    ip = prompt("IP address", current["ip"])
-                    serial = prompt("USB serial", current["serial"])
-                    quality = prompt("Quality", current["quality"])
-                    mode = prompt("Mode", current["mode"])
-                    keep_active_default = current.get("keep_active", "")
-                    keep_active = (
-                        "__YES__"
-                        if prompt_yes_no(
-                            "Keep device active (prevent sleep)",
-                            default=keep_active_default.lower() in {"__yes__", "yes", "y", "true"},
-                        )
-                        else ""
-                    )
-                    background_color = prompt("Background color hex", current.get("background_color", ""))
-                    self.save_profile(
-                        profile_name=current["name"],
-                        nickname=nickname,
-                        ip=ip,
-                        serial=serial,
-                        quality=quality,
-                        mode=mode,
-                        keep_active=keep_active,
-                        background_color=background_color,
-                    )
+                    fields = self._prompt_profile_fields(current)
+                    self.save_profile(current["name"], **fields)
                     print("\nProfile updated.")
                     press_enter()
                     continue

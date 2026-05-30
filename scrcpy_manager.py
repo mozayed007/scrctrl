@@ -17,6 +17,7 @@ import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 # Configure logging
 logging.basicConfig(
@@ -47,6 +48,24 @@ DEFAULT_MODE = "mirror"
 NETWORK_INTERFACES = ["wlan0", "wlan1", "eth0", "eth1"]
 QUALITY_PRESETS = ["low", "balanced", "high", "ultra", "camera_low", "camera_balanced", "camera_high"]
 MODES = ["mirror", "otg", "camera"]
+VIDEO_CODECS = ["h264", "h265", "av1"]
+AUDIO_CODECS = ["opus", "aac", "flac", "raw"]
+AUDIO_SOURCES = [
+    "output",
+    "playback",
+    "mic",
+    "mic-unprocessed",
+    "mic-camcorder",
+    "mic-voice-recognition",
+    "mic-voice-communication",
+    "voice-call",
+    "voice-call-uplink",
+    "voice-call-downlink",
+    "voice-performance",
+]
+RENDER_FITS = ["auto", "stretch", "crop", "letterbox"]
+ORIENTATIONS = ["0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270"]
+RECORD_FORMATS = ["mp4", "mkv", "m4a", "mka", "opus", "aac", "flac", "wav", "raw"]
 ADB_TIMEOUT = 30  # Seconds to wait for ADB commands
 MDNS_TIMEOUT = 10  # Seconds to wait for mDNS discovery
 
@@ -243,6 +262,97 @@ def is_valid_package_name(package_name: str) -> bool:
     if len(parts) < 2:
         return False
     return all(part.isalnum() for part in parts)
+
+
+def is_valid_choice(value: str, choices: Iterable[str]) -> bool:
+    """Validate a value against a list of allowed choices.
+
+    Args:
+        value: Value to validate
+        choices: Allowed choices
+
+    Returns:
+        True if valid, False otherwise
+    """
+    return value.strip().lower() in {c.lower() for c in choices}
+
+
+def is_valid_new_display(value: str) -> bool:
+    """Validate new display specification.
+
+    Args:
+        value: New display spec like '1920x1080/160'
+
+    Returns:
+        True if valid or empty, False otherwise
+    """
+    if not value:
+        return True
+    # Format: WIDTHxHEIGHT or WIDTHxHEIGHT/DPI
+    parts = value.split("/")
+    if len(parts) == 2:
+        res, dpi = parts
+        if not dpi.isdigit():
+            return False
+    elif len(parts) == 1:
+        res = parts[0]
+    else:
+        return False
+    if "x" not in res:
+        return False
+    w, h = res.split("x")
+    return w.isdigit() and h.isdigit()
+
+
+def is_profile_bool_yes(value: str) -> bool:
+    """Check if a profile boolean string represents 'yes'.
+
+    Args:
+        value: Profile field value like '__YES__', 'yes', 'y', 'true'
+
+    Returns:
+        True if the value represents yes, False otherwise
+    """
+    return value.strip().lower() in {"__yes__", "yes", "y", "true", "1", "on"}
+
+
+@dataclass(frozen=True)
+class ProfileField:
+    """Schema for a single profile field."""
+
+    name: str
+    label: str
+    type: Literal["str", "bool", "choice"]
+    section: str = ""
+    default: str = ""
+    choices: tuple[str, ...] = ()
+    scrcpy_flag: str | None = None
+    preset_key: str | None = None
+    bool_style: Literal["positive", "negative"] = "positive"
+    mode_excludes: tuple[str, ...] = ()
+
+
+PROFILE_FIELDS: list[ProfileField] = [
+    ProfileField("nickname", "Display name", "str"),
+    ProfileField("ip", "IP address", "str"),
+    ProfileField("serial", "USB serial", "str"),
+    ProfileField("quality", "Quality", "choice", default="balanced", choices=tuple(QUALITY_PRESETS)),
+    ProfileField("mode", "Mode", "choice", default="mirror", choices=tuple(MODES)),
+    ProfileField("keep_active", "Keep device active", "bool", section="Behavior & Control", scrcpy_flag="--keep-active"),
+    ProfileField("background_color", "Background color", "str", section="Display & Window", scrcpy_flag="--background-color"),
+    ProfileField("video_codec", "Video codec", "choice", section="Streaming & Codecs", choices=tuple(VIDEO_CODECS), scrcpy_flag="--video-codec", preset_key="video_codec"),
+    ProfileField("audio_codec", "Audio codec", "choice", section="Streaming & Codecs", choices=tuple(AUDIO_CODECS), scrcpy_flag="--audio-codec", preset_key="audio_codec"),
+    ProfileField("audio_source", "Audio source", "choice", section="Streaming & Codecs", choices=tuple(AUDIO_SOURCES), scrcpy_flag="--audio-source", preset_key="audio_source"),
+    ProfileField("render_fit", "Render fit", "choice", section="Display & Window", choices=tuple(RENDER_FITS), scrcpy_flag="--render-fit"),
+    ProfileField("window_aspect_ratio_lock", "Lock window aspect ratio", "bool", section="Display & Window", default="yes", bool_style="negative", scrcpy_flag="--no-window-aspect-ratio-lock"),
+    ProfileField("orientation", "Orientation", "choice", section="Display & Window", choices=tuple(ORIENTATIONS), scrcpy_flag="--orientation"),
+    ProfileField("no_control", "Disable control", "bool", section="Behavior & Control", scrcpy_flag="--no-control"),
+    ProfileField("power_off_on_close", "Power off on close", "bool", section="Behavior & Control", scrcpy_flag="--power-off-on-close"),
+    ProfileField("flex_display", "Flex display", "bool", section="Display & Window", scrcpy_flag="--flex-display", mode_excludes=("otg",)),
+    ProfileField("new_display", "New display", "str", section="Display & Window", scrcpy_flag="--new-display", mode_excludes=("otg",)),
+    ProfileField("record", "Record file", "str", section="Recording", scrcpy_flag="--record"),
+    ProfileField("record_format", "Record format", "choice", section="Recording", choices=tuple(RECORD_FORMATS), scrcpy_flag="--record-format"),
+]
 
 
 @dataclass
@@ -597,22 +707,7 @@ class ScrcpyManager:
         Returns:
             List of dictionaries containing profile information
         """
-        parser = self.get_device_profiles()
-        profiles: list[dict[str, str]] = []
-        for section in parser.sections():
-            profiles.append(
-                {
-                    "name": section,
-                    "nickname": parser.get(section, "nickname", fallback=section).strip(),
-                    "ip": parser.get(section, "ip", fallback="").strip(),
-                    "serial": parser.get(section, "serial", fallback="").strip(),
-                    "quality": normalize_quality_name(parser.get(section, "quality", fallback=DEFAULT_QUALITY)),
-                    "mode": parser.get(section, "mode", fallback=DEFAULT_MODE).strip() or DEFAULT_MODE,
-                    "keep_active": parser.get(section, "keep_active", fallback="").strip(),
-                    "background_color": parser.get(section, "background_color", fallback="").strip(),
-                }
-            )
-        return profiles
+        return [self.get_profile(section) for section in self.get_device_profiles().sections()]
 
     def get_profile(self, profile_name: str) -> dict[str, str]:
         """Get a specific device profile.
@@ -629,74 +724,66 @@ class ScrcpyManager:
         parser = self.get_device_profiles()
         if not parser.has_section(profile_name):
             raise ValueError(f"Profile '{profile_name}' was not found")
-        return {
-            "name": profile_name,
-            "nickname": parser.get(profile_name, "nickname", fallback=profile_name).strip(),
-            "ip": parser.get(profile_name, "ip", fallback="").strip(),
-            "serial": parser.get(profile_name, "serial", fallback="").strip(),
-            "quality": normalize_quality_name(parser.get(profile_name, "quality", fallback=DEFAULT_QUALITY)),
-            "mode": parser.get(profile_name, "mode", fallback=DEFAULT_MODE).strip() or DEFAULT_MODE,
-            "keep_active": parser.get(profile_name, "keep_active", fallback="").strip(),
-            "background_color": parser.get(profile_name, "background_color", fallback="").strip(),
-        }
+        result: dict[str, str] = {"name": profile_name}
+        for field in PROFILE_FIELDS:
+            if field.name == "nickname":
+                value = parser.get(profile_name, "nickname", fallback=profile_name).strip()
+            else:
+                value = parser.get(profile_name, field.name, fallback=field.default).strip()
+                if field.name in ("quality", "mode") and not value:
+                    value = field.default
+            result[field.name] = value
+        return result
 
-    def save_profile(
-        self,
-        *,
-        profile_name: str,
-        nickname: str,
-        ip: str = "",
-        serial: str = "",
-        quality: str = DEFAULT_QUALITY,
-        mode: str = DEFAULT_MODE,
-        keep_active: str = "",
-        background_color: str = "",
-    ) -> None:
+    def save_profile(self, profile_name: str, **fields: str) -> None:
         """Save or update a device profile.
 
         Args:
             profile_name: Unique profile identifier
-            nickname: Display name for the profile
-            ip: IP address (for wireless connections)
-            serial: USB serial number (for USB connections)
-            quality: Quality preset name
-            mode: Display mode (mirror/otg/camera)
-            keep_active: Keep device active during session (__YES__/__NO__ or empty)
-            background_color: Window background hex color (e.g. #234567) or empty
+            **fields: Profile field values (ip, serial, quality, mode, ...)
 
         Raises:
-            ValueError: If profile has neither IP nor serial, or if mode/quality is invalid
+            ValueError: If profile has neither IP nor serial, or if any field is invalid
         """
-        # Validate that profile has at least one connection method
-        if not ip and not serial:
+        # Validate connection
+        if not fields.get("ip") and not fields.get("serial"):
             raise ValueError("Profile must have either an IP address or serial number")
 
         # Validate mode
+        mode = fields.get("mode", DEFAULT_MODE)
         if mode and mode not in MODES:
             raise ValueError(f"Invalid mode: {mode}. Must be one of {MODES}")
+
+        # Validate new display
+        new_display = fields.get("new_display", "")
+        if new_display and not is_valid_new_display(new_display):
+            raise ValueError(f"Invalid new display spec: {new_display}. Expected format like 1920x1080/160")
+
+        # Validate choice fields
+        for field in PROFILE_FIELDS:
+            if field.choices:
+                value = fields.get(field.name, "").strip()
+                if value and not is_valid_choice(value, field.choices):
+                    raise ValueError(f"Invalid {field.name}: {value}. Must be one of {field.choices}")
 
         parser = self.get_device_profiles()
         if not parser.has_section(profile_name):
             parser.add_section(profile_name)
-        parser[profile_name]["nickname"] = nickname or profile_name
-        parser[profile_name]["quality"] = normalize_quality_name(quality)
-        parser[profile_name]["mode"] = mode or DEFAULT_MODE
-        if ip:
-            parser[profile_name]["ip"] = ip
-        elif parser.has_option(profile_name, "ip"):
-            parser.remove_option(profile_name, "ip")
-        if serial:
-            parser[profile_name]["serial"] = serial
-        elif parser.has_option(profile_name, "serial"):
-            parser.remove_option(profile_name, "serial")
-        if keep_active:
-            parser[profile_name]["keep_active"] = keep_active
-        elif parser.has_option(profile_name, "keep_active"):
-            parser.remove_option(profile_name, "keep_active")
-        if background_color:
-            parser[profile_name]["background_color"] = background_color
-        elif parser.has_option(profile_name, "background_color"):
-            parser.remove_option(profile_name, "background_color")
+
+        for field in PROFILE_FIELDS:
+            value = fields.get(field.name, "").strip()
+            if field.name == "nickname":
+                value = value or profile_name
+            elif field.name == "quality":
+                value = normalize_quality_name(value or DEFAULT_QUALITY)
+            elif field.name == "mode":
+                value = value or DEFAULT_MODE
+
+            if value:
+                parser[profile_name][field.name] = value
+            elif parser.has_option(profile_name, field.name):
+                parser.remove_option(profile_name, field.name)
+
         self.save_ini(parser, DEVICES_INI)
 
     def delete_profile(self, profile_name: str) -> None:
@@ -716,7 +803,7 @@ class ScrcpyManager:
             preset: Quality preset name
 
         Returns:
-            Dictionary with quality settings (bitrate, fps, buffer, resolution)
+            Dictionary with quality settings (bitrate, fps, buffer, resolution, codecs)
         """
         parser = self.get_quality_config()
         preset = normalize_quality_name(preset)
@@ -727,7 +814,12 @@ class ScrcpyManager:
             "video_bitrate": parser.get(preset, "video_bitrate", fallback=""),
             "max_fps": parser.get(preset, "max_fps", fallback=""),
             "audio_buffer": parser.get(preset, "audio_buffer", fallback=""),
+            "audio_delay": parser.get(preset, "audio_delay", fallback=""),
+            "video_buffer": parser.get(preset, "video_buffer", fallback=""),
             "resolution": parser.get(preset, "resolution", fallback=""),
+            "video_codec": parser.get(preset, "video_codec", fallback=""),
+            "audio_codec": parser.get(preset, "audio_codec", fallback=""),
+            "audio_source": parser.get(preset, "audio_source", fallback=""),
         }
 
     def build_scrcpy_args(
@@ -761,20 +853,49 @@ class ScrcpyManager:
         title = f"scrcpy - {profile['nickname']} ({window_type})"
         args.extend(["--window-title", title])
 
+        # Quality settings from quality.ini
         if settings["video_bitrate"]:
             args.append(f"--video-bit-rate={settings['video_bitrate']}")
         if settings["max_fps"]:
             args.append(f"--max-fps={settings['max_fps']}")
         if settings["audio_buffer"]:
             args.append(f"--audio-output-buffer={settings['audio_buffer']}")
+        if settings.get("audio_delay", ""):
+            args.append(f"--audio-buffer={settings['audio_delay']}")
+        if settings.get("video_buffer", ""):
+            args.append(f"--video-buffer={settings['video_buffer']}")
         if settings["resolution"]:
             args.append(f"--max-size={resolution_to_max_size(settings['resolution'])}")
+
+        # Mode
         if mode == "otg":
             args.append("--otg")
-        if profile.get("keep_active", "").lower() in {"__yes__", "yes", "y", "true"}:
-            args.append("--keep-active")
-        if profile.get("background_color", ""):
-            args.append(f"--background-color={profile['background_color']}")
+        elif mode == "camera":
+            args.append("--video-source=camera")
+
+        # Profile fields mapped to scrcpy flags
+        for field in PROFILE_FIELDS:
+            if not field.scrcpy_flag:
+                continue
+            if field.mode_excludes and mode in field.mode_excludes:
+                continue
+
+            value = profile.get(field.name, field.default).strip()
+            if not value and field.preset_key:
+                value = settings.get(field.preset_key, "").strip()
+
+            if not value:
+                continue
+
+            if field.type == "bool":
+                if field.bool_style == "positive":
+                    if is_profile_bool_yes(value):
+                        args.append(field.scrcpy_flag)
+                else:
+                    if not is_profile_bool_yes(value):
+                        args.append(field.scrcpy_flag)
+            else:
+                args.append(f"{field.scrcpy_flag}={value}")
 
         args.extend(extra)
         return args
@@ -807,7 +928,18 @@ class ScrcpyManager:
         if output:
             print(output)
 
-        if completed.returncode != 0:
+        output_lower = output.lower()
+        adb_failed = (
+            "failed to connect" in output_lower
+            or "cannot connect" in output_lower
+            or "unable to connect" in output_lower
+            or "connection refused" in output_lower
+            or "connection timed out" in output_lower
+            or "no connection could be made" in output_lower
+            or "actively refused" in output_lower
+        )
+
+        if completed.returncode != 0 or adb_failed:
             error_msg = output or "Connection failed with unknown error"
             logger.error(f"Failed to connect to {ipport}: {error_msg}")
             return False, error_msg, None
@@ -905,6 +1037,16 @@ class ScrcpyManager:
             print(f"Connection: {resolved_connection}")
             print(f"Type:       {resolved_type}")
             print(f"Quality:    {profile['quality']}")
+            print(f"Mode:       {profile.get('mode', DEFAULT_MODE)}")
+            for field in PROFILE_FIELDS:
+                if field.name in ("nickname", "ip", "serial", "quality", "mode"):
+                    continue
+                value = profile.get(field.name, "")
+                if value:
+                    if field.type == "bool":
+                        print(f"{field.label}: yes")
+                    else:
+                        print(f"{field.label}: {value}")
             print(f"Command:    {quote_command([str(SCRCPY_EXE), *args])}\n")
         return self.scrcpy(args, detach=detach)
 
@@ -1064,9 +1206,11 @@ class ScrcpyManager:
         """
         devices = self.mdns_discover()
         for device in devices:
-            if device.service_type in ("_adb-tls-connect._tcp", "_adb._tcp") and device.ipport.startswith(ip):
-                logger.debug(f"Found device {ip} at {device.ipport} via mDNS")
-                return device.ipport
+            if device.service_type in ("_adb-tls-connect._tcp", "_adb._tcp"):
+                device_ip = device.ipport.split(":")[0]
+                if device_ip == ip:
+                    logger.debug(f"Found device {ip} at {device.ipport} via mDNS")
+                    return device.ipport
         return None
 
     def select_usb_device(self) -> Device:
@@ -1179,8 +1323,6 @@ class ScrcpyManager:
             "serial": device.serial,
             "quality": "balanced",
             "mode": "mirror",
-            "keep_active": "",
-            "background_color": "",
         }
         self.set_last_used(temp_profile_name, device.kind.lower(), device.serial)
         args = self.build_scrcpy_args(

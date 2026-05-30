@@ -7,10 +7,21 @@ sessions. Falls back gracefully if Textual is not installed.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import subprocess
 from typing import ClassVar
 
-from scrcpy_manager import Device, ScrcpyManager
+logger = logging.getLogger(__name__)
+
+try:
+    _to_thread = asyncio.to_thread
+except AttributeError:
+    async def _to_thread(func, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+from scrcpy_manager import Device, ScrcpyManager, sanitize_profile_name
 
 # Textual imports and all dependent classes live inside the try block
 # so the module remains importable when Textual is not installed.
@@ -19,7 +30,7 @@ try:
     from textual.binding import Binding
     from textual.containers import Horizontal, Vertical, VerticalScroll
     from textual.reactive import reactive
-    from textual.screen import ModalScreen, Screen
+    from textual.screen import Screen
     from textual.widgets import (
         Button,
         Checkbox,
@@ -31,374 +42,25 @@ try:
         Static,
     )
 
-    TEXTUAL_AVAILABLE = True
+    from scrcpy_tui_screens import (
+        TEXTUAL_AVAILABLE,
+        CameraSetupScreen,
+        ConfirmScreen,
+        DiscoverListScreen,
+        HelpScreen,
+        LaunchOptionsScreen,
+        MessageScreen,
+        PairingScreen,
+        ProfileEditScreen,
+        ProfileListScreen,
+        QuickAppScreen,
+    )
 
     def _safe_int(value: str, default: int = 0) -> int:
         try:
             return int(value)
         except (ValueError, TypeError):
             return default
-
-    class MessageScreen(ModalScreen[None]):
-        """Modal screen to display a message with an OK button."""
-
-        def __init__(self, message: str, title: str = "Message") -> None:
-            self.message_text = message
-            self.title_text = title
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static(self.title_text, classes="dialog-title")
-            yield Static(self.message_text, classes="dialog-body")
-            yield Button("OK", id="ok", variant="primary")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "ok":
-                self.dismiss()
-
-    class ConfirmScreen(ModalScreen[bool]):
-        """Modal screen for yes/no confirmation."""
-
-        def __init__(self, message: str, title: str = "Confirm") -> None:
-            self.message_text = message
-            self.title_text = title
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static(self.title_text, classes="dialog-title")
-            yield Static(self.message_text, classes="dialog-body")
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Yes", id="yes", variant="success")
-                yield Button("No", id="no", variant="error")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "yes":
-                self.dismiss(True)
-            elif event.button.id == "no":
-                self.dismiss(False)
-
-    class PairingScreen(ModalScreen[str | None]):
-        """Modal screen to enter a pairing code."""
-
-        def __init__(self, device_name: str, ipport: str) -> None:
-            self.device_name = device_name
-            self.ipport = ipport
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static(f"Pairing with {self.device_name}", classes="dialog-title")
-            yield Static(
-                f"Address: {self.ipport}\nEnter pairing code from device (4-8 digits):",
-                classes="dialog-body",
-            )
-            yield Input(placeholder="e.g. 046882", id="pairing_code")
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Pair", id="pair", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "pair":
-                code = self.query_one("#pairing_code", Input).value.strip()
-                if code and code.isdigit() and 4 <= len(code) <= 8:
-                    self.dismiss(code)
-                else:
-                    self.app.notify("Invalid code. Must be 4-8 digits.", severity="error")
-            elif event.button.id == "cancel":
-                self.dismiss(None)
-
-    class ProfileEditScreen(ModalScreen[dict[str, str] | None]):
-        """Modal screen to add or edit a device profile."""
-
-        def __init__(self, manager: ScrcpyManager, profile: dict[str, str] | None = None) -> None:
-            self.manager = manager
-            self.profile = profile or {}
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            is_edit = bool(self.profile.get("name"))
-            yield Static("Edit Profile" if is_edit else "Add Profile", classes="dialog-title")
-            yield Static("Profile ID (no spaces)", classes="label")
-            yield Input(value=self.profile.get("name", ""), id="profile_id", disabled=is_edit)
-            yield Static("Display Name", classes="label")
-            yield Input(value=self.profile.get("nickname", ""), id="nickname")
-            yield Static("IP Address (for wireless)", classes="label")
-            yield Input(value=self.profile.get("ip", ""), id="ip")
-            yield Static("USB Serial (for USB)", classes="label")
-            yield Input(value=self.profile.get("serial", ""), id="serial")
-            yield Static("Quality", classes="label")
-            qualities = [(q, q) for q in ["low", "balanced", "high", "ultra"]]
-            current_q = self.profile.get("quality", "balanced")
-            yield Select(qualities, value=current_q, id="quality")
-            yield Static("Mode", classes="label")
-            modes = [(m, m) for m in ["mirror", "otg", "camera"]]
-            current_m = self.profile.get("mode", "mirror")
-            yield Select(modes, value=current_m, id="mode")
-            yield Static("Keep device active", classes="label")
-            keep_active_val = self.profile.get("keep_active", "").lower() in {"__yes__", "yes", "y", "true"}
-            yield Checkbox("Prevent sleep (--keep-active)", value=keep_active_val, id="keep_active")
-            yield Static("Background color (optional)", classes="label")
-            yield Input(
-                value=self.profile.get("background_color", ""),
-                placeholder="#234567 or 234567",
-                id="background_color",
-            )
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Save", id="save", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "cancel":
-                self.dismiss(None)
-            elif event.button.id == "save":
-                profile_id = self.query_one("#profile_id", Input).value.strip()
-                nickname = self.query_one("#nickname", Input).value.strip()
-                ip = self.query_one("#ip", Input).value.strip()
-                serial = self.query_one("#serial", Input).value.strip()
-                quality_select = self.query_one("#quality", Select)
-                mode_select = self.query_one("#mode", Select)
-                keep_active_box = self.query_one("#keep_active", Checkbox)
-                background_color_input = self.query_one("#background_color", Input)
-                quality = str(quality_select.value) if quality_select.value else "balanced"
-                mode = str(mode_select.value) if mode_select.value else "mirror"
-                keep_active = "__YES__" if keep_active_box.value else ""
-                background_color = background_color_input.value.strip()
-
-                if not profile_id:
-                    self.app.notify("Profile ID is required.", severity="error")
-                    return
-                if not ip and not serial:
-                    self.app.notify("IP or Serial is required.", severity="error")
-                    return
-
-                result = {
-                    "name": profile_id,
-                    "nickname": nickname or profile_id,
-                    "ip": ip,
-                    "serial": serial,
-                    "quality": quality,
-                    "mode": mode,
-                    "keep_active": keep_active,
-                    "background_color": background_color,
-                }
-                self.dismiss(result)
-
-    class CameraSetupScreen(ModalScreen[list[str] | None]):
-        """Modal screen for camera mode options."""
-
-        def __init__(self) -> None:
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static("Camera Mode Setup", classes="dialog-title")
-            yield Static("Camera ID (0=back, 1=front)", classes="label")
-            yield Input(value="0", id="camera_id")
-            yield Static("Aspect Ratio", classes="label")
-            ratios = [("16:9", "1"), ("4:3", "2"), ("1:1", "3"), ("Native", "4")]
-            yield Select(ratios, value="1", id="aspect")
-            yield Static("Quality", classes="label")
-            qualities = [
-                ("Low (640x480, 2Mbps)", "1"),
-                ("Balanced (720p, 4Mbps)", "2"),
-                ("High (1080p, 8Mbps)", "3"),
-            ]
-            yield Select(qualities, value="2", id="quality")
-            yield Static("Zoom level (1.0=default, leave empty)", classes="label")
-            yield Input(placeholder="1.0", id="zoom")
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Launch", id="launch", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "cancel":
-                self.dismiss(None)
-            elif event.button.id == "launch":
-                args: list[str] = []
-                camera_id = self.query_one("#camera_id", Input).value.strip() or "0"
-                args.extend(["--video-source=camera", f"--camera-id={camera_id}"])
-                aspect_map = {"1": "16:9", "2": "4:3", "3": "1:1"}
-                aspect_val = str(self.query_one("#aspect", Select).value)
-                if aspect_val in aspect_map:
-                    args.append(f"--camera-ar={aspect_map[aspect_val]}")
-                quality_val = str(self.query_one("#quality", Select).value)
-                quality_map = {"1": "camera_low", "2": "camera_balanced", "3": "camera_high"}
-                preset = quality_map.get(quality_val, "camera_balanced")
-                zoom = self.query_one("#zoom", Input).value.strip()
-                self.dismiss([preset, *args, *([f"--camera-zoom={zoom}"] if zoom else [])])
-
-    class QuickAppScreen(ModalScreen[list[str] | None]):
-        """Modal screen for quick app launcher."""
-
-        def __init__(self) -> None:
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static("Quick App Launcher", classes="dialog-title")
-            yield Static("Launch mode", classes="label")
-            modes = [
-                ("Mirror + Launch app", "1"),
-                ("Virtual display + Launch app", "2"),
-                ("Launch app only", "3"),
-            ]
-            yield Select(modes, value="1", id="mode")
-            yield Static("Package name (e.g. com.android.settings)", classes="label")
-            yield Input(placeholder="com.android.settings", id="package")
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Launch", id="launch", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "cancel":
-                self.dismiss(None)
-            elif event.button.id == "launch":
-                package = self.query_one("#package", Input).value.strip()
-                if not package:
-                    self.app.notify("Package name is required.", severity="error")
-                    return
-                mode_val = str(self.query_one("#mode", Select).value)
-                args: list[str] = [f"--start-app={package}"]
-                if mode_val == "2":
-                    args.append("--new-display")
-                self.dismiss(args)
-
-    class DiscoverListScreen(ModalScreen[tuple[ScrcpyManager, str, str] | None]):
-        """Modal screen to select a discovered wireless device."""
-
-        def __init__(self, manager: ScrcpyManager, items: list[tuple[str, str, str]]) -> None:
-            self.manager = manager
-            self.items = items
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static("Discovered Devices", classes="dialog-title")
-            table: DataTable = DataTable(id="discover-table")
-            table.add_columns("#", "Name", "Address", "Source")
-            table.cursor_type = "row"
-            table.zebra_stripes = True
-            for i, (name, ipport, source) in enumerate(self.items, 1):
-                table.add_row(str(i), name, ipport, source)
-            yield table
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Connect", id="connect", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "cancel":
-                self.dismiss(None)
-            elif event.button.id == "connect":
-                table = self.query_one("#discover-table", DataTable)
-                row = table.cursor_row
-                if row is None or not (0 <= row < len(self.items)):
-                    self.app.notify("Select a device to connect.", severity="error")
-                    return
-                name, ipport, _source = self.items[row]
-                self.dismiss((self.manager, ipport, name))
-
-    class InputScreen(ModalScreen[str | None]):
-        """Modal screen for simple text input."""
-
-        def __init__(self, label: str, default: str = "") -> None:
-            self.label = label
-            self.default = default
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static(self.label, classes="dialog-title")
-            yield Input(value=self.default, id="input_value")
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Save", id="save", variant="primary")
-                yield Button("Cancel", id="cancel", variant="default")
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            if event.button.id == "cancel":
-                self.dismiss(None)
-            elif event.button.id == "save":
-                value = self.query_one("#input_value", Input).value.strip()
-                if not value:
-                    self.app.notify(f"{self.label} is required.", severity="error")
-                    return
-                self.dismiss(value)
-
-    class ProfileListScreen(ModalScreen[None]):
-        """Screen to manage profiles (list, add, edit, delete)."""
-
-        def __init__(self, manager: ScrcpyManager) -> None:
-            self.manager = manager
-            super().__init__()
-
-        def compose(self) -> ComposeResult:
-            yield Static("Profile Manager", classes="dialog-title")
-            table: DataTable = DataTable(id="profile-table")
-            table.add_columns("#", "Name", "IP", "Serial", "Quality")
-            table.cursor_type = "row"
-            table.zebra_stripes = True
-            yield table
-            with Horizontal(classes="dialog-buttons"):
-                yield Button("Add", id="add", variant="primary")
-                yield Button("Edit", id="edit", variant="warning")
-                yield Button("Delete", id="delete", variant="error")
-                yield Button("Close", id="close", variant="default")
-
-        def on_mount(self) -> None:
-            self._refresh()
-
-        def _refresh(self) -> None:
-            table = self.query_one("#profile-table", DataTable)
-            table.clear()
-            profiles = self.manager.list_profiles()
-            for i, p in enumerate(profiles, 1):
-                table.add_row(str(i), p["nickname"], p.get("ip", ""), p.get("serial", ""), p["quality"])
-
-        def on_button_pressed(self, event: Button.Pressed) -> None:
-            bid = event.button.id
-            if bid == "close":
-                self.dismiss()
-            elif bid == "add":
-                self.app.push_screen(ProfileEditScreen(self.manager), self._on_profile_saved)
-            elif bid == "edit":
-                table = self.query_one("#profile-table", DataTable)
-                row = table.cursor_row
-                profiles = self.manager.list_profiles()
-                if row is None or not (0 <= row < len(profiles)):
-                    self.app.notify("Select a profile to edit.", severity="error")
-                    return
-                self.app.push_screen(ProfileEditScreen(self.manager, profiles[row]), self._on_profile_saved)
-            elif bid == "delete":
-                table = self.query_one("#profile-table", DataTable)
-                row = table.cursor_row
-                profiles = self.manager.list_profiles()
-                if row is None or not (0 <= row < len(profiles)):
-                    self.app.notify("Select a profile to delete.", severity="error")
-                    return
-                target = profiles[row]
-                self.app.push_screen(
-                    ConfirmScreen(f"Delete profile '{target['name']}'?", "Delete"),
-                    lambda confirmed: self._on_delete(confirmed, target["name"]),
-                )
-
-        def _on_profile_saved(self, result: dict[str, str] | None) -> None:
-            if result is None:
-                return
-            try:
-                self.manager.save_profile(
-                    profile_name=result["name"],
-                    nickname=result["nickname"],
-                    ip=result.get("ip", ""),
-                    serial=result.get("serial", ""),
-                    quality=result.get("quality", "balanced"),
-                    mode=result.get("mode", "mirror"),
-                    keep_active=result.get("keep_active", ""),
-                    background_color=result.get("background_color", ""),
-                )
-                self.app.notify(f"Profile '{result['name']}' saved")
-                self._refresh()
-            except Exception as exc:
-                self.app.push_screen(MessageScreen(str(exc), "Save Error"))
-
-        def _on_delete(self, confirmed: bool | None, name: str) -> None:
-            if confirmed:
-                self.manager.delete_profile(name)
-                self.app.notify(f"Deleted '{name}'")
-                self._refresh()
 
     class MainScreen(Screen[None]):
         """Main screen showing devices, profiles, and action buttons."""
@@ -413,8 +75,10 @@ try:
             Binding("p", "quickapp", "QuickApp"),
             Binding("a", "profiles", "Profiles"),
             Binding("l", "quick_launch", "Quick Launch"),
+            Binding("o", "launch_options", "Launch Options"),
             Binding("u", "update", "Update"),
             Binding("x", "shutdown", "Shutdown"),
+            Binding("h", "help", "Help"),
         ]
 
         CSS: ClassVar[str] = """  # type: ignore[assignment]
@@ -454,7 +118,7 @@ try:
                     yield Static("Saved Profiles", classes="panel-title")
                     yield Static("No profiles", classes="panel-subtitle")
                     prof_table: DataTable = DataTable(id="profiles-table")
-                    prof_table.add_columns("#", "Name", "Status")
+                    prof_table.add_columns("#", "Name", "Quality", "Mode", "Video", "Audio")
                     prof_table.cursor_type = "row"
                     prof_table.zebra_stripes = True
                     yield prof_table
@@ -462,12 +126,14 @@ try:
                 with VerticalScroll(id="actions-panel"):
                     yield Static("Actions", classes="panel-title")
                     yield Button("[L] Quick Launch", id="act-quick", variant="primary", classes="action-btn")
+                    yield Button("[O] Launch Options", id="act-launch-opts", classes="action-btn")
                     yield Button("[D] Detect Devices", id="act-detect", classes="action-btn")
                     yield Button("[F] Discover", id="act-discover", classes="action-btn")
                     yield Button("[S] Setup Wireless", id="act-setup", classes="action-btn")
                     yield Button("[C] Camera Mode", id="act-camera", classes="action-btn")
                     yield Button("[P] Quick App", id="act-quickapp", classes="action-btn")
                     yield Button("[A] Profiles", id="act-profiles", classes="action-btn")
+                    yield Button("[H] Help", id="act-help", classes="action-btn")
                     yield Button("[U] Update scrcpy", id="act-update", classes="action-btn")
                     yield Button("[X] Shutdown ADB", id="act-shutdown", classes="action-btn")
                     yield Button("[R] Refresh", id="act-refresh", classes="action-btn")
@@ -476,40 +142,60 @@ try:
             yield Static("Ready", id="status")
             yield Footer()
 
-        def on_mount(self) -> None:
-            # Auto-reconnect saved wireless profiles on startup
+        def _run_bg(self, coro) -> None:
+            """Run a coroutine in the background with error handling."""
+            async def _wrapper():
+                try:
+                    await coro
+                except Exception as exc:
+                    self.app.notify(f"Error: {exc}", severity="error")
+                    logger.exception("Background task failed")
+            asyncio.create_task(_wrapper())
+
+        async def on_mount(self) -> None:
+            # Show UI immediately, do slow operations in background
+            await self._refresh_data_async()
+            self.set_interval(3, self.refresh_data)
+            self._run_bg(self._background_auto_connect())
+            self._run_bg(self._background_update_check())
+
+        async def _background_auto_connect(self) -> None:
+            """Auto-reconnect saved wireless profiles without blocking UI."""
             try:
-                reconnected = self.manager.auto_connect_profiles()
+                reconnected = await _to_thread(self.manager.auto_connect_profiles)
                 if reconnected:
                     self.app.notify(f"Auto-reconnected: {', '.join(reconnected)}")
+                    self.refresh_data()
             except Exception:
                 pass
 
-            # Non-blocking background update check (notification only in TUI)
-            if self.manager.get_pref_bool("auto_check_updates", True):
-                try:
-                    from scrcpy_cli import check_updates_silent
-
-                    newer = check_updates_silent()
-                    if newer:
-                        self.app.notify(
-                            f"Update available: {newer}. Press [U] to update.",
-                            severity="information",
-                            timeout=8,
-                        )
-                except Exception:
-                    pass
-
-            self.refresh_data()
-            self.set_interval(3, self.refresh_data)
-
-        def refresh_data(self) -> None:
+        async def _background_update_check(self) -> None:
+            """Check for updates in background without blocking UI."""
+            if not self.manager.get_pref_bool("auto_check_updates", True):
+                return
             try:
-                self.devices_data = self.manager.list_devices()
+                from scrcpy_cli import check_updates_silent
+
+                newer = await _to_thread(check_updates_silent)
+                if newer:
+                    self.app.notify(
+                        f"Update available: {newer}. Press [U] to update.",
+                        severity="information",
+                        timeout=8,
+                    )
+            except Exception:
+                pass
+
+        async def _refresh_data_async(self) -> None:
+            try:
+                self.devices_data = await _to_thread(self.manager.list_devices)
                 self.profiles_data = self.manager.list_profiles()
                 self.status_message = f"{len(self.devices_data)} device(s), {len(self.profiles_data)} profile(s)"
             except Exception as exc:
                 self.status_message = f"Error: {exc}"
+
+        def refresh_data(self) -> None:
+            self._run_bg(self._refresh_data_async())
 
         def watch_devices_data(self, devices: list[Device]) -> None:
             table = self.query_one("#devices-table", DataTable)
@@ -532,11 +218,20 @@ try:
             else:
                 subtitle.update(f"{len(profiles)} saved")
                 for index, profile in enumerate(profiles, start=1):
-                    status = profile.get("ip", "") or profile.get("serial", "") or "manual"
-                    table.add_row(str(index), profile["nickname"], status)
+                    table.add_row(
+                        str(index),
+                        profile["nickname"],
+                        profile.get("quality", "balanced"),
+                        profile.get("mode", "mirror"),
+                        profile.get("video_codec", "-") or "default",
+                        profile.get("audio_codec", "-") or "default",
+                    )
 
         def watch_status_message(self, message: str) -> None:
             self.query_one("#status", Static).update(message)
+
+        def action_quit(self) -> None:
+            self.app.exit()
 
         def _get_selected_device(self) -> Device | None:
             table = self.query_one("#devices-table", DataTable)
@@ -619,17 +314,21 @@ try:
             elif button_id == "act-detect":
                 self.action_detect()
             elif button_id == "act-discover":
-                self.action_discover()
+                self._run_bg(self.action_discover())
             elif button_id == "act-setup":
                 self.action_setup()
             elif button_id == "act-camera":
-                self.action_camera()
+                self._run_bg(self.action_camera())
             elif button_id == "act-quickapp":
-                self.action_quickapp()
+                self._run_bg(self.action_quickapp())
             elif button_id == "act-profiles":
                 self.action_profiles()
             elif button_id == "act-quick":
-                self.action_quick_launch()
+                self._run_bg(self.action_quick_launch())
+            elif button_id == "act-launch-opts":
+                self.action_launch_options()
+            elif button_id == "act-help":
+                self.action_help()
             elif button_id == "act-update":
                 self.action_update()
             elif button_id == "act-shutdown":
@@ -639,15 +338,18 @@ try:
             self.refresh_data()
             self.app.notify("Refreshed")
 
+        def action_help(self) -> None:
+            self.app.push_screen(HelpScreen())
+
         def action_detect(self) -> None:
             self.app.push_screen(
                 MessageScreen("Use the device list on the left. Auto-refresh is active.", "Device Detection")
             )
 
-        def action_discover(self) -> None:
+        async def action_discover(self) -> None:
             self.status_message = "Discovering..."
             try:
-                devices = self.manager.mdns_discover()
+                devices = await _to_thread(self.manager.mdns_discover)
                 if not devices:
                     self.app.push_screen(
                         MessageScreen(
@@ -656,15 +358,9 @@ try:
                     )
                     return
 
-                items: list[tuple[str, str, str]] = []
+                items: list[tuple[str, str, str, str]] = []
                 for d in devices:
-                    items.append((d.name, d.ipport, d.source))
-
-                # Simple selection via message
-                lines = ["Select a device to connect:\n"]
-                for i, (name, ipport, source) in enumerate(items, 1):
-                    lines.append(f"[{i}] {name}  ({ipport})  [{source}]")
-                lines.append("\nEnter the number in the input below:")
+                    items.append((d.name, d.ipport, d.source, d.service_type))
 
                 self.app.push_screen(
                     DiscoverListScreen(self.manager, items),
@@ -674,38 +370,93 @@ try:
                 self.app.push_screen(MessageScreen(str(exc), "Discovery Error"))
             self.refresh_data()
 
-        def _on_discover_result(self, result: tuple[ScrcpyManager, str, str] | None) -> None:
+        def _on_discover_result(self, result: tuple[ScrcpyManager, str, str, str] | None) -> None:
             if result is None:
                 return
-            manager, ipport, name = result
+            manager, ipport, name, service_type = result
+            if service_type == "_adb-tls-pairing._tcp":
+                self.app.push_screen(
+                    PairingScreen(name, ipport),
+                    lambda code: self._on_pairing_code(code, manager, ipport, name),
+                )
+            else:
+                self._run_bg(self._do_discover_connect(result))
+
+        async def _do_discover_connect(self, result: tuple[ScrcpyManager, str, str, str]) -> None:
+            manager, ipport, name, service_type = result
             self.status_message = f"Connecting to {name}..."
             try:
-                success, message, serial = manager.connect_wireless(ipport)
+                success, message, serial = await _to_thread(lambda: manager.connect_wireless(ipport))
                 if not success or not serial:
                     self.app.push_screen(MessageScreen(message, "Connection Failed"))
                     return
                 self.app.push_screen(
                     ConfirmScreen(f"Save '{name}' as a profile?", "Save Profile"),
-                    lambda save: self._on_save_profile(save, manager, name, ipport, serial),
+                    lambda save: self._on_save_profile(save, manager, name, ipport, serial, service_type),
                 )
             except Exception as exc:
                 self.app.push_screen(MessageScreen(str(exc), "Connection Error"))
             self.refresh_data()
 
-        def _on_save_profile(
-            self, save: bool | None, manager: ScrcpyManager, name: str, ipport: str, serial: str
+        def _on_pairing_code(
+            self, code: str | None, manager: ScrcpyManager, ipport: str, name: str
         ) -> None:
+            if code is None:
+                return
+            self._run_bg(self._do_pair_and_connect(code, manager, ipport, name))
+
+        async def _do_pair_and_connect(
+            self, code: str, manager: ScrcpyManager, ipport: str, name: str
+        ) -> None:
+            self.status_message = f"Pairing with {name}..."
+            try:
+                success, message = await _to_thread(lambda: manager.pair_device(ipport, code))
+                if not success:
+                    self.app.push_screen(MessageScreen(message, "Pairing Failed"))
+                    return
+                self.app.notify(f"Paired with {name}")
+                await asyncio.sleep(2)
+
+                devices = await _to_thread(manager.mdns_discover)
+                selected_ip = ipport.split(":")[0]
+                connect_device = None
+                for d in devices:
+                    if d.service_type == "_adb-tls-connect._tcp":
+                        d_ip = d.ipport.split(":")[0]
+                        if d_ip == selected_ip:
+                            connect_device = d
+                            break
+
+                if not connect_device:
+                    self.app.push_screen(
+                        MessageScreen(
+                            "Device paired but not found in connection list. Please try discovery again.",
+                            "Connection Not Found",
+                        )
+                    )
+                    return
+
+                self.app.notify(f"Found connection port: {connect_device.ipport}")
+                await self._do_discover_connect(
+                    (manager, connect_device.ipport, name, connect_device.service_type)
+                )
+            except Exception as exc:
+                self.app.push_screen(MessageScreen(str(exc), "Pairing Error"))
+            self.refresh_data()
+
+        def _on_save_profile(
+            self, save: bool | None, manager: ScrcpyManager, name: str, ipport: str, serial: str, service_type: str
+        ) -> None:
+            ip_to_save = ipport if service_type == "_adb._tcp" else ipport.split(":")[0]
             if not save:
                 # Launch without saving
                 temp_profile = {
                     "name": name,
                     "nickname": name,
-                    "ip": ipport.split(":")[0],
+                    "ip": ip_to_save,
                     "serial": "",
                     "quality": "balanced",
                     "mode": "mirror",
-                    "keep_active": "",
-                    "background_color": "",
                 }
                 try:
                     args = manager.build_scrcpy_args(
@@ -718,26 +469,27 @@ try:
                     self.app.push_screen(MessageScreen(str(exc), "Launch Error"))
                 return
 
-            def on_profile_id(profile_id: str | None) -> None:
-                if not profile_id:
+            def on_profile_edit(result: dict[str, str] | None) -> None:
+                if not result:
                     return
                 try:
-                    manager.save_profile(
-                        profile_name=profile_id,
-                        nickname=name,
-                        ip=ipport.split(":")[0],
-                        serial="",
-                        quality="balanced",
-                        mode="mirror",
-                        keep_active="",
-                        background_color="",
-                    )
-                    self.app.notify(f"Saved profile '{profile_id}'")
-                    self._launch_profile(profile_id)
+                    name = result.pop("name")
+                    manager.save_profile(name, **result)
+                    self.app.notify(f"Saved profile '{name}'")
+                    self._launch_profile(name)
                 except Exception as exc:
                     self.app.push_screen(MessageScreen(str(exc), "Save Error"))
 
-            self.app.push_screen(InputScreen("Profile ID", name), on_profile_id)
+            # Pre-fill profile edit with discovered device info
+            prefill = {
+                "name": sanitize_profile_name(name),
+                "nickname": name,
+                "ip": ip_to_save,
+                "serial": "",
+                "quality": "balanced",
+                "mode": "mirror",
+            }
+            self.app.push_screen(ProfileEditScreen(prefill), on_profile_edit)
 
         def action_setup(self) -> None:
             self.app.push_screen(
@@ -751,16 +503,19 @@ try:
         def _on_setup_confirm(self, confirmed: bool | None) -> None:
             if not confirmed:
                 return
+            self._run_bg(self._do_setup())
+
+        async def _do_setup(self) -> None:
             self.status_message = "Running wireless setup..."
             try:
-                self.manager.setup_wireless()  # type: ignore[attr-defined]
+                await _to_thread(self.manager.setup_wireless)  # type: ignore[attr-defined]
                 self.app.notify("Wireless setup complete")
             except Exception as exc:
                 self.app.push_screen(MessageScreen(str(exc), "Setup Error"))
             self.refresh_data()
 
-        def action_camera(self) -> None:
-            devices = self.manager.list_devices()
+        async def action_camera(self) -> None:
+            devices = await _to_thread(self.manager.list_devices)
             if not devices:
                 self.app.push_screen(MessageScreen("No connected devices found.", "Camera Mode"))
                 return
@@ -772,9 +527,12 @@ try:
         def _on_camera_result(self, result: list[str] | None) -> None:
             if result is None:
                 return
+            self._run_bg(self._do_camera_launch(result))
+
+        async def _do_camera_launch(self, result: list[str]) -> None:
             preset = result[0]
             extra_args = result[1:]
-            devices = self.manager.list_devices()
+            devices = await _to_thread(self.manager.list_devices)
             if not devices:
                 self.app.push_screen(MessageScreen("No devices found.", "Camera Mode"))
                 return
@@ -789,8 +547,8 @@ try:
             args.extend(["--window-title", f"scrcpy - {selected.display_name} (Camera Mode)"])
             self._run_scrcpy(args)
 
-        def action_quickapp(self) -> None:
-            devices = self.manager.list_devices()
+        async def action_quickapp(self) -> None:
+            devices = await _to_thread(self.manager.list_devices)
             if not devices:
                 self.app.push_screen(MessageScreen("No connected devices found.", "Quick App"))
                 return
@@ -802,7 +560,13 @@ try:
         def _on_quickapp_result(self, result: list[str] | None) -> None:
             if result is None:
                 return
-            devices = self.manager.list_devices()
+            self._run_bg(self._do_quickapp_launch(result))
+
+        async def _do_quickapp_launch(self, result: list[str]) -> None:
+            devices = await _to_thread(self.manager.list_devices)
+            if not devices:
+                self.app.push_screen(MessageScreen("No devices found.", "Quick App"))
+                return
             selected = devices[0]
             args = ["-s", selected.serial, *result]
             args.extend(["--window-title", f"scrcpy - {selected.display_name} (App)"])
@@ -814,10 +578,10 @@ try:
                 lambda _: self.refresh_data(),
             )
 
-        def action_quick_launch(self) -> None:
+        async def action_quick_launch(self) -> None:
             self.status_message = "Quick launching..."
             try:
-                result = self.manager.quick_launch(detach=True)
+                result = await _to_thread(lambda: self.manager.quick_launch(detach=True))
                 if isinstance(result, subprocess.Popen):
                     self.app.notify(f"Quick launch started (pid {result.pid})")
                 elif result != 0:
@@ -828,6 +592,32 @@ try:
                 self.app.push_screen(MessageScreen(str(exc), "Quick Launch Error"))
             self.refresh_data()
 
+        def action_launch_options(self) -> None:
+            profile = self._get_selected_profile()
+            if not profile:
+                self.app.notify("Select a profile first to use launch options.", severity="warning")
+                return
+            self.app.push_screen(
+                LaunchOptionsScreen(self.manager, profile),
+                lambda extra: self._on_launch_options(extra, profile["name"]),
+            )
+
+        def _on_launch_options(self, extra: list[str] | None, profile_name: str) -> None:
+            if extra is None:
+                return
+            self.status_message = f"Launching {profile_name} with options..."
+            try:
+                result = self.manager.launch_profile(profile_name, extra=extra, detach=True)
+                if isinstance(result, subprocess.Popen):
+                    self.app.notify(f"Launched {profile_name} with options (pid {result.pid})")
+                elif result != 0:
+                    self.app.push_screen(MessageScreen(f"scrcpy exited with code {result}", "Launch Error"))
+                else:
+                    self.app.notify(f"Launched {profile_name} with options")
+            except Exception as exc:
+                self.app.push_screen(MessageScreen(str(exc), "Launch Error"))
+            self.refresh_data()
+
         def action_shutdown(self) -> None:
             self.app.push_screen(
                 ConfirmScreen("Disconnect all ADB connections and stop the server?", "Shutdown ADB"),
@@ -836,13 +626,16 @@ try:
 
         def _on_shutdown_confirm(self, confirmed: bool | None) -> None:
             if confirmed:
-                self.status_message = "Shutting down ADB..."
-                try:
-                    self.manager.shutdown()
-                    self.app.notify("ADB shutdown complete")
-                except Exception as exc:
-                    self.app.push_screen(MessageScreen(str(exc), "Shutdown Error"))
-                self.refresh_data()
+                self._run_bg(self._do_shutdown())
+
+        async def _do_shutdown(self) -> None:
+            self.status_message = "Shutting down ADB..."
+            try:
+                await _to_thread(self.manager.shutdown)
+                self.app.notify("ADB shutdown complete")
+            except Exception as exc:
+                self.app.push_screen(MessageScreen(str(exc), "Shutdown Error"))
+            self.refresh_data()
 
         def action_update(self) -> None:
             self.app.push_screen(
@@ -857,11 +650,14 @@ try:
         def _on_update_confirm(self, confirmed: bool | None) -> None:
             if not confirmed:
                 return
+            self._run_bg(self._do_update())
+
+        async def _do_update(self) -> None:
             self.status_message = "Updating scrcpy..."
             try:
                 from scrcpy_cli import update_scrcpy
 
-                result = update_scrcpy()
+                result = await _to_thread(update_scrcpy)
                 if result == 0:
                     self.app.notify("scrcpy updated successfully! Restart to use new binaries.")
                 else:
@@ -891,6 +687,12 @@ try:
             margin-top: 1;
             color: $text-muted;
         }
+        .section-header {
+            text-style: bold;
+            color: $primary;
+            margin-top: 1;
+            margin-bottom: 1;
+        }
         """
 
         def __init__(self, manager: ScrcpyManager) -> None:
@@ -911,3 +713,17 @@ except ImportError:
     def run_tui(manager: ScrcpyManager) -> None:  # noqa: ARG001
         """Stub when Textual is not installed."""
         raise ImportError("Textual is required for the TUI. Install it with:\n  pip install textual")
+
+
+if __name__ == "__main__":
+    try:
+        manager = ScrcpyManager()
+        run_tui(manager)
+    except ImportError as exc:
+        print(exc)
+        raise SystemExit(1)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
