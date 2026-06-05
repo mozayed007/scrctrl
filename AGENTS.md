@@ -135,4 +135,14 @@ Key logic:
 6. Add CLI argument to `build_parser` in `scrcpy_cli.py`
 7. Add to `_build_extra_from_args` in `scrcpy_cli.py`
 8. Update `config/quality.ini` if the preset should include it
-9. Update `README.md` and `AGENTS.md` docs
+9. Update `scrcpy_agent.py` JSON-safe service methods if the flag should be agent-addressable
+10. Update `scrcpy_mcp.py` tool/resource schemas if the flag should be exposed to MCP clients
+11. Update `README.md`, `AGENTS.md`, and tests
+
+## Agent Experience / Android CUA
+
+- `scrcpy_agent.py` is the prompt-free agent service layer; keep it JSON-safe and non-interactive
+- `scrcpy_mcp.py` is the local MCP stdio server; keep tool schemas explicit and avoid arbitrary `adb shell`
+- Android CUA sessions require `session_id` for control actions and should use direct ADB screenshots (`exec-out screencap -p`)
+- Risky actions should return `approval_required` or `blocked`, not silently execute
+- Scrcpy remains the watch/recording surface; ADB remains the reliable state/action surface

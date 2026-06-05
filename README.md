@@ -180,6 +180,30 @@ python scrcpy_cli.py profiles
 python scrcpy_cli.py shutdown
 ```
 
+### Agent / MCP Interface
+
+ScrCtrl also exposes a prompt-free agent surface for local tools, MCP clients, and Android CUA-style workflows.
+
+```bash
+# Run the local MCP stdio server
+scrctrl-mcp
+# or
+python scrcpy_cli.py mcp
+
+# Inspect machine-readable state
+python scrcpy_cli.py agent capabilities --json
+python scrcpy_cli.py agent devices --json
+python scrcpy_cli.py agent profiles --json
+python scrcpy_cli.py agent build-command MainPhone --quality high --extra=--no-control --json
+
+# Start an Android control session for curated ADB actions
+python scrcpy_cli.py agent session-start MainPhone "Inspect the Settings app" --allowed-package com.android.settings --observe-only --json
+```
+
+Agent code lives in `scrcpy_agent.py`; the MCP JSON-RPC entrypoint lives in `scrcpy_mcp.py`. The MCP server exposes ScrCtrl resources for devices, profiles, presets, last-used state, and capabilities, plus curated tools for discovery, launching, screenshots, UI dumps, taps, swipes, typing, keyevents, app starts, waits, and approval-gated risky actions.
+
+Android CUA sessions use direct ADB screenshots and `adb shell input` commands, so coordinates match the device display rather than a cropped desktop mirror. Scrcpy remains useful as a human watch window or recording surface.
+
 ### Convenience Wrappers
 
 Each subcommand has a thin wrapper in `scripts\`:

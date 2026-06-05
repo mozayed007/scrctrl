@@ -283,6 +283,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("menu", help="Open the interactive terminal menu")
+    subparsers.add_parser("mcp", help="Run the ScrCtrl MCP stdio server")
     subparsers.add_parser("detect", help="List connected adb devices")
     subparsers.add_parser("discover", help="Discover wireless-debuggable devices")
     subparsers.add_parser("setup", help="Run wireless adb setup")
@@ -325,6 +326,37 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--no-backup", action="store_true", help="Skip backing up current binaries")
     update.add_argument("--python-deps", action="store_true", help="Also upgrade Python packages (textual)")
 
+    agent = subparsers.add_parser("agent", help="Machine-readable agent and CUA commands")
+    agent_subparsers = agent.add_subparsers(dest="agent_command")
+
+    def add_json_flag(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument("--json", action="store_true", help="Emit JSON output (agent commands always use JSON)")
+
+    add_json_flag(agent_subparsers.add_parser("capabilities", help="Describe agent capabilities"))
+    add_json_flag(agent_subparsers.add_parser("devices", help="List connected devices"))
+    add_json_flag(agent_subparsers.add_parser("profiles", help="List saved profiles"))
+    profile = agent_subparsers.add_parser("profile", help="Read one profile")
+    profile.add_argument("profile_name")
+    add_json_flag(profile)
+    add_json_flag(agent_subparsers.add_parser("quality-presets", help="List quality presets"))
+    add_json_flag(agent_subparsers.add_parser("last-used", help="Read last-used profile metadata"))
+
+    build_command = agent_subparsers.add_parser("build-command", help="Build a scrcpy command without launching")
+    build_command.add_argument("profile_name")
+    build_command.add_argument("--connection")
+    build_command.add_argument("--connection-type")
+    build_command.add_argument("--mode")
+    build_command.add_argument("--quality", choices=QUALITY_PRESETS)
+    build_command.add_argument("--extra", action="append", default=[], help="Extra scrcpy arg; repeat for multiple args")
+    add_json_flag(build_command)
+
+    session_start = agent_subparsers.add_parser("session-start", help="Start an Android CUA session")
+    session_start.add_argument("profile_or_serial")
+    session_start.add_argument("goal")
+    session_start.add_argument("--allowed-package", action="append", default=[])
+    session_start.add_argument("--observe-only", action="store_true")
+    add_json_flag(session_start)
+
     return parser
 
 
@@ -359,6 +391,52 @@ def _build_extra_from_args(args: argparse.Namespace) -> list[str]:
     return extra
 
 
+def _print_agent_json(payload: dict[str, object]) -> int:
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def run_agent_command(args: argparse.Namespace) -> int:
+    """Run prompt-free agent CLI commands."""
+    from scrcpy_agent import AgentService
+
+    service = AgentService()
+    agent_command = args.agent_command or "capabilities"
+    if agent_command == "capabilities":
+        return _print_agent_json(service.capabilities())
+    if agent_command == "devices":
+        return _print_agent_json(service.list_devices())
+    if agent_command == "profiles":
+        return _print_agent_json(service.list_profiles())
+    if agent_command == "profile":
+        return _print_agent_json(service.get_profile(args.profile_name))
+    if agent_command == "quality-presets":
+        return _print_agent_json(service.get_quality_presets())
+    if agent_command == "last-used":
+        return _print_agent_json(service.get_last_used())
+    if agent_command == "build-command":
+        return _print_agent_json(
+            service.build_scrcpy_command(
+                args.profile_name,
+                connection=args.connection,
+                connection_type=args.connection_type,
+                mode_override=args.mode,
+                quality_override=args.quality,
+                extra=args.extra,
+            )
+        )
+    if agent_command == "session-start":
+        return _print_agent_json(
+            service.android_session_start(
+                args.profile_or_serial,
+                args.goal,
+                allowed_packages=args.allowed_package,
+                observe_only=args.observe_only,
+            )
+        )
+    raise RuntimeError(f"Unknown agent command: {agent_command}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -370,6 +448,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             no_backup=args.no_backup,
             update_python_deps=args.python_deps,
         )
+    if command == "mcp":
+        from scrcpy_mcp import main as mcp_main
+
+        return mcp_main()
+    if command == "agent":
+        return run_agent_command(args)
 
     try:
         manager = LegacyMenu()

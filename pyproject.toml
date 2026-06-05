@@ -35,6 +35,7 @@ dependencies = []
 
 [project.optional-dependencies]
 tui = ["textual>=0.50.0"]
+agent = []
 dev = [
     "ruff>=0.5.0",
     "mypy>=1.10.0",
@@ -49,12 +50,15 @@ Issues = "https://github.com/mozayed007/scrctrl/issues"
 
 [project.scripts]
 scrctrl = "scrcpy_cli:main"
+scrctrl-mcp = "scrcpy_mcp:main"
 
 [tool.setuptools]
 py-modules = [
+    "scrcpy_agent",
     "scrcpy_cli",
     "scrcpy_legacy_menu",
     "scrcpy_manager",
+    "scrcpy_mcp",
     "scrcpy_tui",
     "scrcpy_tui_screens",
 ]
