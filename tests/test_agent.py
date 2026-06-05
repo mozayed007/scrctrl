@@ -156,7 +156,9 @@ class AgentServiceTests(unittest.TestCase):
     def test_validate_scrcpy_args_accepts_known_and_rejects_unknown(self) -> None:
         known = {"--no-control", "--new-display", "--start-app"}
 
-        accepted = validate_scrcpy_args(["--no-control", "--new-display", "--start-app=org.videolan.vlc"], known_options=known)
+        accepted = validate_scrcpy_args(
+            ["--no-control", "--new-display", "--start-app=org.videolan.vlc"], known_options=known
+        )
         rejected = validate_scrcpy_args(["--not-real", "plain-value"], known_options=known)
 
         self.assertTrue(accepted["ok"])

@@ -115,7 +115,9 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "start_mirror": {
         "description": "Start mirroring a profile or connected serial.",
-        "inputSchema": _schema({"profile_or_serial": {"type": "string"}, "detach": {"type": "boolean"}}, ["profile_or_serial"]),
+        "inputSchema": _schema(
+            {"profile_or_serial": {"type": "string"}, "detach": {"type": "boolean"}}, ["profile_or_serial"]
+        ),
     },
     "android_session_start": {
         "description": "Start an Android CUA-style session. Control tools require the returned session_id.",
@@ -131,7 +133,9 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "android_screenshot": {
         "description": "Capture a direct device screenshot for a session.",
-        "inputSchema": _schema({"session_id": {"type": "string"}, "include_base64": {"type": "boolean"}}, ["session_id"]),
+        "inputSchema": _schema(
+            {"session_id": {"type": "string"}, "include_base64": {"type": "boolean"}}, ["session_id"]
+        ),
     },
     "android_dump_ui": {
         "description": "Dump and summarize the Android UI hierarchy for a session.",
@@ -168,7 +172,9 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "android_start_app": {
         "description": "Start an Android app inside an existing session.",
-        "inputSchema": _schema({"session_id": {"type": "string"}, "package": {"type": "string"}}, ["session_id", "package"]),
+        "inputSchema": _schema(
+            {"session_id": {"type": "string"}, "package": {"type": "string"}}, ["session_id", "package"]
+        ),
     },
     "android_wait": {
         "description": "Wait for the device UI to settle.",
@@ -400,36 +406,74 @@ class ScrcpyMcpServer:
     @staticmethod
     def _resources_list() -> list[dict[str, str]]:
         return [
-            {"uri": "scrctrl://devices", "name": "devices", "title": "Connected devices", "mimeType": "application/json"},
-            {"uri": "scrctrl://profiles", "name": "profiles", "title": "Saved profiles", "mimeType": "application/json"},
+            {
+                "uri": "scrctrl://devices",
+                "name": "devices",
+                "title": "Connected devices",
+                "mimeType": "application/json",
+            },
+            {
+                "uri": "scrctrl://profiles",
+                "name": "profiles",
+                "title": "Saved profiles",
+                "mimeType": "application/json",
+            },
             {
                 "uri": "scrctrl://quality-presets",
                 "name": "quality-presets",
                 "title": "Quality presets",
                 "mimeType": "application/json",
             },
-            {"uri": "scrctrl://last-used", "name": "last-used", "title": "Last used profile", "mimeType": "application/json"},
+            {
+                "uri": "scrctrl://last-used",
+                "name": "last-used",
+                "title": "Last used profile",
+                "mimeType": "application/json",
+            },
             {
                 "uri": "scrctrl://agent/capabilities",
                 "name": "agent-capabilities",
                 "title": "Agent capabilities",
                 "mimeType": "application/json",
             },
-            {"uri": "scrctrl://scrcpy/version", "name": "scrcpy-version", "title": "scrcpy version", "mimeType": "application/json"},
-            {"uri": "scrctrl://scrcpy/features", "name": "scrcpy-features", "title": "scrcpy features", "mimeType": "application/json"},
-            {"uri": "scrctrl://scrcpy/options", "name": "scrcpy-options", "title": "scrcpy options", "mimeType": "application/json"},
+            {
+                "uri": "scrctrl://scrcpy/version",
+                "name": "scrcpy-version",
+                "title": "scrcpy version",
+                "mimeType": "application/json",
+            },
+            {
+                "uri": "scrctrl://scrcpy/features",
+                "name": "scrcpy-features",
+                "title": "scrcpy features",
+                "mimeType": "application/json",
+            },
+            {
+                "uri": "scrctrl://scrcpy/options",
+                "name": "scrcpy-options",
+                "title": "scrcpy options",
+                "mimeType": "application/json",
+            },
             {
                 "uri": "scrctrl://scrcpy/shortcuts",
                 "name": "scrcpy-shortcuts",
                 "title": "scrcpy shortcuts",
                 "mimeType": "application/json",
             },
-            {"uri": "scrctrl://scrcpy/recipes", "name": "scrcpy-recipes", "title": "scrcpy recipes", "mimeType": "application/json"},
+            {
+                "uri": "scrctrl://scrcpy/recipes",
+                "name": "scrcpy-recipes",
+                "title": "scrcpy recipes",
+                "mimeType": "application/json",
+            },
         ]
 
     @staticmethod
     def _prompts_list() -> list[dict[str, str]]:
-        return [{"name": name, "title": name.replace("-", " ").title(), "description": description} for name, description in PROMPTS.items()]
+        return [
+            {"name": name, "title": name.replace("-", " ").title(), "description": description}
+            for name, description in PROMPTS.items()
+        ]
 
     @staticmethod
     def _result(message_id: Any, result: dict[str, Any]) -> dict[str, Any]:

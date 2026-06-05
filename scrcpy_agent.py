@@ -53,6 +53,7 @@ def default_agent_artifact_dir() -> Path:
 def default_agent_session_dir() -> Path:
     return default_agent_root() / "sessions"
 
+
 KEYEVENTS: dict[str, str] = {
     "back": "KEYCODE_BACK",
     "home": "KEYCODE_HOME",
@@ -340,7 +341,12 @@ class AndroidComputer:
 
     @staticmethod
     def _completed(action: str, returncode: int, details: dict[str, Any]) -> dict[str, Any]:
-        return {"status": "completed" if returncode == 0 else "failed", "action": action, "returncode": returncode, **details}
+        return {
+            "status": "completed" if returncode == 0 else "failed",
+            "action": action,
+            "returncode": returncode,
+            **details,
+        }
 
 
 class AgentService:
@@ -504,8 +510,10 @@ class AgentService:
         extra: list[str] | None = None,
     ) -> dict[str, Any]:
         profile = self.manager.get_profile(profile_name)
-        resolved_connection = connection or profile.get("serial") or (
-            f"{profile.get('ip')}:{DEFAULT_ADB_PORT}" if profile.get("ip") else ""
+        resolved_connection = (
+            connection
+            or profile.get("serial")
+            or (f"{profile.get('ip')}:{DEFAULT_ADB_PORT}" if profile.get("ip") else "")
         )
         resolved_type = connection_type or ("wireless" if ":" in resolved_connection else "USB")
         args = self.manager.build_scrcpy_args(
@@ -608,7 +616,9 @@ class AgentService:
             self.manager.get_profile(profile_or_serial)
             return self.launch_profile(profile_or_serial, detach=detach)
         except ValueError:
-            device = Device(serial=profile_or_serial, state="device", kind="WIRELESS" if ":" in profile_or_serial else "USB")
+            device = Device(
+                serial=profile_or_serial, state="device", kind="WIRELESS" if ":" in profile_or_serial else "USB"
+            )
             temp_profile_name = sanitize_profile_name(profile_or_serial)
             profile = {
                 "name": temp_profile_name,
@@ -618,7 +628,9 @@ class AgentService:
                 "quality": "balanced",
                 "mode": "mirror",
             }
-            args = self.manager.build_scrcpy_args(profile=profile, connection=device.serial, connection_type=device.kind)
+            args = self.manager.build_scrcpy_args(
+                profile=profile, connection=device.serial, connection_type=device.kind
+            )
             return _jsonable_process_result(self.manager.scrcpy(args, detach=detach))
 
     def android_session_start(
@@ -645,7 +657,9 @@ class AgentService:
 
     def android_screenshot(self, session_id: str, *, include_base64: bool = False) -> dict[str, Any]:
         session = self._session(session_id)
-        result = AndroidComputer(self.manager, session.serial, self.artifact_dir).screenshot(include_base64=include_base64)
+        result = AndroidComputer(self.manager, session.serial, self.artifact_dir).screenshot(
+            include_base64=include_base64
+        )
         session.last_screenshot = result["path"]
         self._log(session, "screenshot", "completed", {"path": result["path"]})
         self._save_session(session)
@@ -662,7 +676,9 @@ class AgentService:
     def android_tap(self, session_id: str, x: int, y: int) -> dict[str, Any]:
         return self._control(session_id, "tap", {"x": x, "y": y})
 
-    def android_swipe(self, session_id: str, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300) -> dict[str, Any]:
+    def android_swipe(
+        self, session_id: str, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 300
+    ) -> dict[str, Any]:
         return self._control(
             session_id,
             "swipe",
@@ -691,7 +707,12 @@ class AgentService:
         if not action:
             raise ValueError(f"Approval '{approval_id}' was not found")
         result = self._execute_control(session, action["action"], action["params"])
-        self._log(session, action["action"], result.get("status", "completed"), {"approval_id": approval_id, **action["params"]})
+        self._log(
+            session,
+            action["action"],
+            result.get("status", "completed"),
+            {"approval_id": approval_id, **action["params"]},
+        )
         self._save_session(session)
         return {"session": session.to_dict(), "result": result}
 
@@ -765,14 +786,20 @@ class AgentService:
                 "reason": f"Package '{package}' is outside the session allowlist",
             }
 
-        if session.allowed_packages and session.current_package and session.current_package not in session.allowed_packages:
+        if (
+            session.allowed_packages
+            and session.current_package
+            and session.current_package not in session.allowed_packages
+        ):
             return {
                 "status": "blocked",
                 "reason": f"Current package '{session.current_package}' is outside the session allowlist",
             }
 
         if package in RISKY_PACKAGES:
-            return self._approval_required(session, action, params, f"Package '{package}' may change apps, permissions, or purchases")
+            return self._approval_required(
+                session, action, params, f"Package '{package}' may change apps, permissions, or purchases"
+            )
 
         if action == "type_text":
             text = str(params.get("text", "")).lower()
@@ -824,7 +851,9 @@ class AgentService:
 
     @staticmethod
     def _log(session: AndroidSession, action: str, status: str, details: dict[str, Any]) -> None:
-        session.action_log.append(AndroidActionLog(action=action, status=status, timestamp=time.time(), details=details))
+        session.action_log.append(
+            AndroidActionLog(action=action, status=status, timestamp=time.time(), details=details)
+        )
 
     @staticmethod
     def _call_quietly(func: Any, *args: Any, **kwargs: Any) -> tuple[Any, str]:
@@ -835,7 +864,9 @@ class AgentService:
 
     def _scrcpy_list(self, serial: str, list_flag: str) -> dict[str, Any]:
         catalog = build_catalog(SCRCPY_EXE)
-        validation = validate_scrcpy_args([list_flag], known_options=set(catalog.get("help_detected_options", [])) or None)
+        validation = validate_scrcpy_args(
+            [list_flag], known_options=set(catalog.get("help_detected_options", [])) or None
+        )
         if not validation["ok"]:
             raise ValueError("; ".join(validation["errors"]))
         completed = self.manager.run([str(SCRCPY_EXE), "-s", serial, list_flag], timeout=30)

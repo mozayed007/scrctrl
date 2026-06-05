@@ -488,7 +488,9 @@ PROFILE_FIELDS: list[ProfileField] = [
         section="Behavior & Control",
         scrcpy_flag="--power-off-on-close",
     ),
-    ProfileField("turn_screen_off", "Turn screen off", "bool", section="Behavior & Control", scrcpy_flag="--turn-screen-off"),
+    ProfileField(
+        "turn_screen_off", "Turn screen off", "bool", section="Behavior & Control", scrcpy_flag="--turn-screen-off"
+    ),
     ProfileField("show_touches", "Show touches", "bool", section="Behavior & Control", scrcpy_flag="--show-touches"),
     ProfileField("no_audio", "Disable audio", "bool", section="Streaming & Codecs", scrcpy_flag="--no-audio"),
     ProfileField("no_window", "Disable window", "bool", section="Display & Window", scrcpy_flag="--no-window"),

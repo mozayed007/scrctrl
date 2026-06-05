@@ -353,7 +353,9 @@ def build_parser() -> argparse.ArgumentParser:
     agent_subparsers = agent.add_subparsers(dest="agent_command")
 
     def add_json_flag(command_parser: argparse.ArgumentParser) -> None:
-        command_parser.add_argument("--json", action="store_true", help="Emit JSON output (agent commands always use JSON)")
+        command_parser.add_argument(
+            "--json", action="store_true", help="Emit JSON output (agent commands always use JSON)"
+        )
 
     add_json_flag(agent_subparsers.add_parser("capabilities", help="Describe agent capabilities"))
     add_json_flag(agent_subparsers.add_parser("devices", help="List connected devices"))
@@ -410,13 +412,17 @@ def build_parser() -> argparse.ArgumentParser:
     build_command.add_argument("--connection-type")
     build_command.add_argument("--mode")
     build_command.add_argument("--quality", choices=QUALITY_PRESETS)
-    build_command.add_argument("--extra", action="append", default=[], help="Extra scrcpy arg; repeat for multiple args")
+    build_command.add_argument(
+        "--extra", action="append", default=[], help="Extra scrcpy arg; repeat for multiple args"
+    )
     add_json_flag(build_command)
 
     launch_profile = agent_subparsers.add_parser("launch-profile", help="Launch a saved profile")
     launch_profile.add_argument("profile_name")
     launch_profile.add_argument("--quality", choices=QUALITY_PRESETS)
-    launch_profile.add_argument("--extra", action="append", default=[], help="Extra scrcpy arg; repeat for multiple args")
+    launch_profile.add_argument(
+        "--extra", action="append", default=[], help="Extra scrcpy arg; repeat for multiple args"
+    )
     launch_profile.add_argument("--foreground", action="store_true", help="Wait for scrcpy instead of detaching")
     add_json_flag(launch_profile)
 
