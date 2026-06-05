@@ -213,6 +213,8 @@ Agent code lives in `scrcpy_agent.py`; the scrcpy knowledge catalog lives in `sc
 
 Android CUA sessions use direct ADB screenshots and `adb shell input` commands, so coordinates match the device display rather than a cropped desktop mirror. Scrcpy remains useful as a human watch window or recording surface.
 
+Session ids are UUID-backed and persisted CLI sessions re-check foreground package policy before control or approval execution. If an allowlist is set and the foreground app cannot be verified, control is blocked.
+
 CLI sessions persist under `%TEMP%\scrctrl-agent\sessions`, so the same `session_id` can be reused across separate `scrctrl agent` commands. See [`docs/agent-cua-smoke.md`](docs/agent-cua-smoke.md) for a live-device smoke workflow.
 
 ### Convenience Wrappers

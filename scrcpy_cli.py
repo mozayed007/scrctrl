@@ -15,7 +15,7 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from scrcpy_agent import AgentService, agent_doctor, default_agent_session_dir
@@ -559,11 +559,15 @@ def _print_agent_json(payload: dict[str, object]) -> int:
     return 0
 
 
-def run_agent_command(args: argparse.Namespace, service: AgentService | None = None) -> int:
+def run_agent_command(
+    args: argparse.Namespace,
+    service: AgentService | None = None,
+    doctor_func: Callable[[], dict[str, object]] = agent_doctor,
+) -> int:
     """Run prompt-free agent CLI commands."""
     agent_command = args.agent_command or "capabilities"
     if agent_command == "doctor":
-        return _print_agent_json(agent_doctor())
+        return _print_agent_json(doctor_func())
 
     if service is None:
         service = AgentService(session_dir=default_agent_session_dir())

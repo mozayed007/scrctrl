@@ -278,6 +278,62 @@ class AgentServiceTests(unittest.TestCase):
             self.assertEqual(result["result"]["status"], "completed")
             self.assertEqual(manager.adb_calls[-1][-2:], ("text", "delete%saccount"))
 
+    def test_persistent_session_refreshes_current_package_before_control(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions"
+            first = AgentService(FakeManager(), artifact_dir=Path(tmp) / "artifacts", session_dir=session_dir)
+            session = first.android_session_start("USB123", "persist allowlist", allowed_packages=["com.example.app"])[
+                "session"
+            ]
+
+            manager = FakeManager()
+            manager.shell_outputs = ["mCurrentFocus=Window{u0 com.other.app/.MainActivity}"]
+            second = AgentService(manager, artifact_dir=Path(tmp) / "artifacts", session_dir=session_dir)
+            result = second.android_tap(session["session_id"], 5, 6)
+
+            self.assertEqual(result["status"], "blocked")
+            self.assertIn("com.other.app", result["reason"])
+            self.assertFalse(manager.adb_calls)
+
+    def test_allowlisted_control_blocks_when_current_package_is_unknown(self) -> None:
+        manager = FakeManager()
+        service = AgentService(manager)
+        session = service.android_session_start("USB123", "unknown package", allowed_packages=["com.example.app"])[
+            "session"
+        ]
+        manager.shell_outputs = ["", "", ""]
+
+        result = service.android_tap(session["session_id"], 5, 6)
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("unknown", result["reason"])
+        self.assertFalse(manager.adb_calls)
+
+    def test_approve_action_rechecks_allowlist_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp) / "sessions"
+            first = AgentService(FakeManager(), artifact_dir=Path(tmp) / "artifacts", session_dir=session_dir)
+            session = first.android_session_start("USB123", "persist approval", allowed_packages=["com.example.app"])[
+                "session"
+            ]
+            approval = first.android_type_text(session["session_id"], "delete account")
+
+            manager = FakeManager()
+            manager.shell_outputs = ["mCurrentFocus=Window{u0 com.other.app/.MainActivity}"]
+            second = AgentService(manager, artifact_dir=Path(tmp) / "artifacts", session_dir=session_dir)
+            result = second.approve_action(session["session_id"], approval["approval_id"])
+
+            self.assertEqual(result["status"], "blocked")
+            self.assertIn("com.other.app", result["reason"])
+            self.assertFalse(manager.adb_calls)
+
+    def test_session_id_rejects_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            service = AgentService(FakeManager(), session_dir=Path(tmp) / "sessions")
+
+            with self.assertRaises(ValueError):
+                service.android_tap("..\\outside", 1, 2)
+
     def test_missing_persistent_session_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             service = AgentService(FakeManager(), session_dir=Path(tmp) / "sessions")
@@ -300,42 +356,80 @@ class AgentCliTests(unittest.TestCase):
 
     def test_agent_parser_accepts_all_expanded_commands(self) -> None:
         cases = [
-            ["agent", "doctor", "--json"],
-            ["agent", "scrcpy-version", "--json"],
-            ["agent", "scrcpy-features", "--json"],
-            ["agent", "scrcpy-options", "--json"],
-            ["agent", "scrcpy-shortcuts", "--json"],
-            ["agent", "scrcpy-recipes", "--json"],
-            ["agent", "scrcpy-recipe", "virtual-app", "--package", "org.videolan.vlc", "--json"],
-            ["agent", "validate-scrcpy-args", "--json", "--", "--no-control", "--new-display"],
-            ["agent", "list-apps", "USB123", "--json"],
-            ["agent", "list-cameras", "USB123", "--json"],
-            ["agent", "list-camera-sizes", "USB123", "--json"],
-            ["agent", "list-displays", "USB123", "--json"],
-            ["agent", "list-encoders", "USB123", "--json"],
-            ["agent", "discover-wireless", "--json"],
-            ["agent", "connect-wireless", "192.168.1.2:5555", "--json"],
-            ["agent", "pair-wireless", "192.168.1.2:37199", "123456", "--json"],
-            ["agent", "shutdown-adb", "--json"],
-            ["agent", "launch-profile", "MainPhone", "--quality", "high", "--extra=--no-control", "--json"],
-            ["agent", "quick-launch", "MainPhone", "--foreground", "--json"],
-            ["agent", "launch-app", "USB123", "com.example.app", "--mode", "app_only", "--json"],
-            ["agent", "start-mirror", "USB123", "--json"],
-            ["agent", "screenshot", "session-1", "--include-base64", "--json"],
-            ["agent", "dump-ui", "session-1", "--json"],
-            ["agent", "tap", "session-1", "10", "20", "--json"],
-            ["agent", "swipe", "session-1", "1", "2", "3", "4", "--duration-ms", "100", "--json"],
-            ["agent", "type-text", "session-1", "hello", "--json"],
-            ["agent", "keyevent", "session-1", "back", "--json"],
-            ["agent", "start-app", "session-1", "com.example.app", "--json"],
-            ["agent", "wait", "session-1", "0.1", "--json"],
-            ["agent", "approve", "session-1", "approval-1", "--json"],
+            (["agent", "doctor", "--json"], {"agent_command": "doctor", "json": True}),
+            (["agent", "scrcpy-version", "--json"], {"agent_command": "scrcpy-version", "json": True}),
+            (["agent", "scrcpy-features", "--json"], {"agent_command": "scrcpy-features", "json": True}),
+            (["agent", "scrcpy-options", "--json"], {"agent_command": "scrcpy-options", "json": True}),
+            (["agent", "scrcpy-shortcuts", "--json"], {"agent_command": "scrcpy-shortcuts", "json": True}),
+            (["agent", "scrcpy-recipes", "--json"], {"agent_command": "scrcpy-recipes", "json": True}),
+            (
+                ["agent", "scrcpy-recipe", "virtual-app", "--package", "org.videolan.vlc", "--json"],
+                {"agent_command": "scrcpy-recipe", "name": "virtual-app", "package": "org.videolan.vlc"},
+            ),
+            (
+                ["agent", "validate-scrcpy-args", "--json", "--", "--no-control", "--new-display"],
+                {"agent_command": "validate-scrcpy-args", "args": ["--", "--no-control", "--new-display"]},
+            ),
+            (["agent", "list-apps", "USB123", "--json"], {"agent_command": "list-apps", "serial": "USB123"}),
+            (["agent", "list-cameras", "USB123", "--json"], {"agent_command": "list-cameras", "serial": "USB123"}),
+            (
+                ["agent", "list-camera-sizes", "USB123", "--json"],
+                {"agent_command": "list-camera-sizes", "serial": "USB123"},
+            ),
+            (["agent", "list-displays", "USB123", "--json"], {"agent_command": "list-displays", "serial": "USB123"}),
+            (["agent", "list-encoders", "USB123", "--json"], {"agent_command": "list-encoders", "serial": "USB123"}),
+            (["agent", "discover-wireless", "--json"], {"agent_command": "discover-wireless", "json": True}),
+            (
+                ["agent", "connect-wireless", "192.168.1.2:5555", "--json"],
+                {"agent_command": "connect-wireless", "ipport": "192.168.1.2:5555"},
+            ),
+            (
+                ["agent", "pair-wireless", "192.168.1.2:37199", "123456", "--json"],
+                {"agent_command": "pair-wireless", "ipport": "192.168.1.2:37199", "pairing_code": "123456"},
+            ),
+            (["agent", "shutdown-adb", "--json"], {"agent_command": "shutdown-adb", "json": True}),
+            (
+                ["agent", "launch-profile", "MainPhone", "--quality", "high", "--extra=--no-control", "--json"],
+                {"agent_command": "launch-profile", "profile_name": "MainPhone", "quality": "high", "extra": ["--no-control"]},
+            ),
+            (
+                ["agent", "quick-launch", "MainPhone", "--foreground", "--json"],
+                {"agent_command": "quick-launch", "profile_name": "MainPhone", "foreground": True},
+            ),
+            (
+                ["agent", "launch-app", "USB123", "com.example.app", "--mode", "app_only", "--json"],
+                {"agent_command": "launch-app", "serial": "USB123", "package": "com.example.app", "mode": "app_only"},
+            ),
+            (["agent", "start-mirror", "USB123", "--json"], {"agent_command": "start-mirror", "profile_or_serial": "USB123"}),
+            (
+                ["agent", "screenshot", "session-1", "--include-base64", "--json"],
+                {"agent_command": "screenshot", "session_id": "session-1", "include_base64": True},
+            ),
+            (["agent", "dump-ui", "session-1", "--json"], {"agent_command": "dump-ui", "session_id": "session-1"}),
+            (["agent", "tap", "session-1", "10", "20", "--json"], {"agent_command": "tap", "x": 10, "y": 20}),
+            (
+                ["agent", "swipe", "session-1", "1", "2", "3", "4", "--duration-ms", "100", "--json"],
+                {"agent_command": "swipe", "x1": 1, "y1": 2, "x2": 3, "y2": 4, "duration_ms": 100},
+            ),
+            (["agent", "type-text", "session-1", "hello", "--json"], {"agent_command": "type-text", "text": "hello"}),
+            (["agent", "keyevent", "session-1", "back", "--json"], {"agent_command": "keyevent", "key": "back"}),
+            (
+                ["agent", "start-app", "session-1", "com.example.app", "--json"],
+                {"agent_command": "start-app", "package": "com.example.app"},
+            ),
+            (["agent", "wait", "session-1", "0.1", "--json"], {"agent_command": "wait", "seconds": 0.1}),
+            (
+                ["agent", "approve", "session-1", "approval-1", "--json"],
+                {"agent_command": "approve", "approval_id": "approval-1"},
+            ),
         ]
 
-        for case in cases:
-            with self.subTest(case=case):
-                args = build_parser().parse_args(case)
+        for argv, expected in cases:
+            with self.subTest(case=argv):
+                args = build_parser().parse_args(argv)
                 self.assertEqual(args.command, "agent")
+                for field, value in expected.items():
+                    self.assertEqual(getattr(args, field), value)
 
     def test_run_agent_command_dispatches_control_to_service(self) -> None:
         service = AgentService(FakeManager())
@@ -349,13 +443,17 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(service.sessions[session["session_id"]].action_log[-1].action, "tap")
 
     def test_run_agent_command_dispatches_launch_to_service(self) -> None:
-        service = AgentService(FakeManager())
+        manager = FakeManager()
+        service = AgentService(manager)
         args = build_parser().parse_args(["agent", "launch-app", "USB123", "com.example.app", "--mode", "app_only"])
 
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(io.StringIO()) as stdout:
             result = run_agent_command(args, service)
 
+        payload = json.loads(stdout.getvalue())
         self.assertEqual(result, 0)
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(manager.adb_calls[-1][:6], ("-s", "USB123", "shell", "monkey", "-p", "com.example.app"))
 
     def test_run_agent_command_dispatches_scrcpy_catalog_to_service(self) -> None:
         service = AgentService(FakeManager())
@@ -366,6 +464,16 @@ class AgentCliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertIn("org.videolan.vlc", stdout.getvalue())
+
+    def test_run_agent_command_dispatches_doctor_to_injected_callable(self) -> None:
+        args = build_parser().parse_args(["agent", "doctor"])
+
+        with contextlib.redirect_stdout(io.StringIO()) as stdout:
+            result = run_agent_command(args, doctor_func=lambda: {"ok": True, "checks": []})
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(result, 0)
+        self.assertTrue(payload["ok"])
 
 
 class McpServerTests(unittest.TestCase):

@@ -703,9 +703,20 @@ class AgentService:
 
     def approve_action(self, session_id: str, approval_id: str) -> dict[str, Any]:
         session = self._session(session_id)
-        action = session.pending_approvals.pop(approval_id, None)
+        action = session.pending_approvals.get(approval_id)
         if not action:
             raise ValueError(f"Approval '{approval_id}' was not found")
+        policy = self._check_policy(session, action["action"], action["params"], allow_approval=False)
+        if policy:
+            self._log(
+                session,
+                action["action"],
+                policy["status"],
+                {"approval_id": approval_id, **action["params"]},
+            )
+            self._save_session(session)
+            return {"session": session.to_dict(), **policy}
+        session.pending_approvals.pop(approval_id, None)
         result = self._execute_control(session, action["action"], action["params"])
         self._log(
             session,
@@ -775,7 +786,14 @@ class AgentService:
             session.current_package = computer.current_foreground_package() or session.current_package
         return result
 
-    def _check_policy(self, session: AndroidSession, action: str, params: dict[str, Any]) -> dict[str, Any] | None:
+    def _check_policy(
+        self,
+        session: AndroidSession,
+        action: str,
+        params: dict[str, Any],
+        *,
+        allow_approval: bool = True,
+    ) -> dict[str, Any] | None:
         if session.observe_only:
             return {"status": "blocked", "reason": "Session is observe-only"}
 
@@ -786,22 +804,22 @@ class AgentService:
                 "reason": f"Package '{package}' is outside the session allowlist",
             }
 
-        if (
-            session.allowed_packages
-            and session.current_package
-            and session.current_package not in session.allowed_packages
-        ):
-            return {
-                "status": "blocked",
-                "reason": f"Current package '{session.current_package}' is outside the session allowlist",
-            }
+        if action != "start_app" and session.allowed_packages:
+            current_package = self._refresh_current_package(session)
+            if not current_package:
+                return {"status": "blocked", "reason": "Current package is unknown"}
+            if current_package not in session.allowed_packages:
+                return {
+                    "status": "blocked",
+                    "reason": f"Current package '{current_package}' is outside the session allowlist",
+                }
 
-        if package in RISKY_PACKAGES:
+        if allow_approval and package in RISKY_PACKAGES:
             return self._approval_required(
                 session, action, params, f"Package '{package}' may change apps, permissions, or purchases"
             )
 
-        if action == "type_text":
+        if allow_approval and action == "type_text":
             text = str(params.get("text", "")).lower()
             for pattern in RISKY_TEXT_PATTERNS:
                 if pattern in text:
@@ -820,9 +838,10 @@ class AgentService:
         return {"status": "approval_required", "approval_id": approval_id, "reason": reason}
 
     def _session(self, session_id: str) -> AndroidSession:
-        session = self.sessions.get(session_id)
+        normalized_session_id = self._normalize_session_id(session_id)
+        session = self.sessions.get(normalized_session_id)
         if not session and self.session_dir is not None:
-            session = self._load_session(session_id)
+            session = self._load_session(normalized_session_id)
         if not session:
             raise ValueError(f"Session '{session_id}' was not found")
         return session
@@ -830,7 +849,14 @@ class AgentService:
     def _session_path(self, session_id: str) -> Path:
         if self.session_dir is None:
             raise RuntimeError("Session persistence is not enabled")
-        return self.session_dir / f"{session_id}.json"
+        normalized_session_id = self._normalize_session_id(session_id)
+        root = self.session_dir.resolve()
+        path = (root / f"{normalized_session_id}.json").resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"Invalid session id: {session_id}") from exc
+        return path
 
     def _save_session(self, session: AndroidSession) -> None:
         if self.session_dir is None:
@@ -846,8 +872,22 @@ class AgentService:
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
         session = AndroidSession.from_storage(data)
+        if session.session_id != self._normalize_session_id(session_id):
+            raise ValueError(f"Session file id mismatch: {session_id}")
         self.sessions[session.session_id] = session
         return session
+
+    @staticmethod
+    def _normalize_session_id(session_id: str) -> str:
+        try:
+            return str(uuid.UUID(str(session_id)))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid session id: {session_id}") from exc
+
+    def _refresh_current_package(self, session: AndroidSession) -> str:
+        current_package = AndroidComputer(self.manager, session.serial, self.artifact_dir).current_foreground_package()
+        session.current_package = current_package
+        return current_package
 
     @staticmethod
     def _log(session: AndroidSession, action: str, status: str, details: dict[str, Any]) -> None:
