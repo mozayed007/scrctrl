@@ -20,9 +20,16 @@ from pathlib import Path
 
 from scrcpy_legacy_menu import LegacyMenu
 from scrcpy_manager import (
+    AUDIO_CODECS,
+    AUDIO_SOURCES,
     BIN_DIR,
+    ORIENTATIONS,
+    QUALITY_PRESETS,
+    RECORD_FORMATS,
+    RENDER_FITS,
     ROOT,
     SCRCPY_EXE,
+    VIDEO_CODECS,
     logger,
     prompt_yes_no,
 )
@@ -88,6 +95,7 @@ def update_scrcpy(
         0 on success, 1 on failure
     """
     print("Checking for scrcpy updates...")
+    BIN_DIR.mkdir(exist_ok=True)
     current_version = get_current_scrcpy_version()
     print(f"Current version: {current_version}")
 
@@ -283,23 +291,34 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("shutdown", help="Disconnect devices and stop adb")
     subparsers.add_parser("profiles", help="Open profile manager")
 
+    def add_launch_overrides(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--quality", choices=QUALITY_PRESETS, help="Override quality preset for this launch"
+        )
+        command_parser.add_argument("--video-codec", choices=VIDEO_CODECS, help="Override video codec")
+        command_parser.add_argument("--audio-codec", choices=AUDIO_CODECS, help="Override audio codec")
+        command_parser.add_argument("--audio-source", choices=AUDIO_SOURCES, help="Override audio source")
+        command_parser.add_argument("--render-fit", choices=RENDER_FITS, help="Override render fit mode")
+        command_parser.add_argument(
+            "--no-window-aspect-ratio-lock",
+            action="store_true",
+            help="Disable window aspect ratio lock",
+        )
+        command_parser.add_argument("--orientation", choices=ORIENTATIONS, help="Override orientation")
+        command_parser.add_argument("--no-control", action="store_true", help="Disable device control")
+        command_parser.add_argument("--power-off-on-close", action="store_true", help="Turn device screen off on close")
+        command_parser.add_argument("--flex-display", action="store_true", help="Enable flex display")
+        command_parser.add_argument("--new-display", help="Create new display (e.g. 1920x1080/160)")
+        command_parser.add_argument("--record", help="Record to file path")
+        command_parser.add_argument("--record-format", choices=RECORD_FORMATS, help="Force recording format")
+
     quick = subparsers.add_parser("quick", help="Quick-launch last or selected profile")
     quick.add_argument("profile", nargs="?", help="Optional profile name")
+    add_launch_overrides(quick)
 
     launch = subparsers.add_parser("launch", help="Launch a saved profile")
     launch.add_argument("profile", help="Profile name to launch")
-    launch.add_argument("--video-codec", choices=["h264", "h265", "av1"], help="Override video codec")
-    launch.add_argument("--audio-codec", choices=["opus", "aac", "flac", "raw"], help="Override audio codec")
-    launch.add_argument("--audio-source", choices=["output", "playback", "mic", "mic-unprocessed", "mic-camcorder", "mic-voice-recognition", "mic-voice-communication", "voice-call", "voice-call-uplink", "voice-call-downlink", "voice-performance"], help="Override audio source")
-    launch.add_argument("--render-fit", choices=["letterbox", "stretch", "crop", "auto"], help="Override render fit mode")
-    launch.add_argument("--no-window-aspect-ratio-lock", action="store_true", help="Disable window aspect ratio lock")
-    launch.add_argument("--orientation", choices=["0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270"], help="Override orientation")
-    launch.add_argument("--no-control", action="store_true", help="Disable device control")
-    launch.add_argument("--power-off-on-close", action="store_true", help="Turn device screen off on close")
-    launch.add_argument("--flex-display", action="store_true", help="Enable flex display")
-    launch.add_argument("--new-display", help="Create new display (e.g. 1920x1080/160)")
-    launch.add_argument("--record", help="Record to file path")
-    launch.add_argument("--record-format", choices=["mp4", "mkv", "m4a", "mka", "opus", "aac", "flac", "wav"], help="Force recording format")
+    add_launch_overrides(launch)
 
     update = subparsers.add_parser("update", help="Update scrcpy/adb binaries from GitHub releases")
     update.add_argument("--force", action="store_true", help="Reinstall even if already on latest version")
@@ -344,7 +363,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     command = args.command or "menu"
-    manager = LegacyMenu()
+
+    if command == "update":
+        return update_scrcpy(
+            force=args.force,
+            no_backup=args.no_backup,
+            update_python_deps=args.python_deps,
+        )
+
+    try:
+        manager = LegacyMenu()
+    except SystemExit as exc:
+        if command == "menu":
+            print(exc)
+            print("Run 'python scrcpy_cli.py update' to download the bundled scrcpy/adb binaries.")
+            return 1
+        raise
 
     if command == "menu":
         # Auto-reconnect saved wireless profiles before showing UI
@@ -400,16 +434,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return manager.profiles_menu()
     if command == "quick":
         extra = _build_extra_from_args(args)
-        return manager.quick_launch(args.profile, extra=extra)  # type: ignore[return-value]
+        return manager.quick_launch(args.profile, extra=extra, quality_override=args.quality)  # type: ignore[return-value]
     if command == "launch":
         extra = _build_extra_from_args(args)
-        return manager.launch_profile(args.profile, extra=extra)  # type: ignore[return-value]
-    if command == "update":
-        return update_scrcpy(
-            force=args.force,
-            no_backup=args.no_backup,
-            update_python_deps=args.python_deps,
-        )
+        return manager.launch_profile(args.profile, extra=extra, quality_override=args.quality)  # type: ignore[return-value]
     parser.print_help()
     return 1
 

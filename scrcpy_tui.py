@@ -10,18 +10,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
-from typing import ClassVar
+from collections.abc import Awaitable, Callable
+from typing import Any, ClassVar, TypeVar
+
+from scrcpy_manager import Device, ScrcpyManager, sanitize_profile_name
 
 logger = logging.getLogger(__name__)
 
-try:
-    _to_thread = asyncio.to_thread
-except AttributeError:
-    async def _to_thread(func, *args, **kwargs):
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+_T = TypeVar("_T")
 
-from scrcpy_manager import Device, ScrcpyManager, sanitize_profile_name
+
+async def _to_thread(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    if hasattr(asyncio, "to_thread"):
+        return await asyncio.to_thread(func, *args, **kwargs)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
 
 # Textual imports and all dependent classes live inside the try block
 # so the module remains importable when Textual is not installed.
@@ -33,12 +37,9 @@ try:
     from textual.screen import Screen
     from textual.widgets import (
         Button,
-        Checkbox,
         DataTable,
         Footer,
         Header,
-        Input,
-        Select,
         Static,
     )
 
@@ -46,6 +47,7 @@ try:
         TEXTUAL_AVAILABLE,
         CameraSetupScreen,
         ConfirmScreen,
+        DeviceSelectScreen,
         DiscoverListScreen,
         HelpScreen,
         LaunchOptionsScreen,
@@ -100,6 +102,7 @@ try:
 
         def __init__(self, manager: ScrcpyManager) -> None:
             self.manager = manager
+            self._tasks: set[asyncio.Task[None]] = set()
             super().__init__()
 
         def compose(self) -> ComposeResult:
@@ -142,15 +145,19 @@ try:
             yield Static("Ready", id="status")
             yield Footer()
 
-        def _run_bg(self, coro) -> None:
+        def _run_bg(self, coro: Awaitable[None]) -> None:
             """Run a coroutine in the background with error handling."""
-            async def _wrapper():
+
+            async def _wrapper() -> None:
                 try:
                     await coro
                 except Exception as exc:
                     self.app.notify(f"Error: {exc}", severity="error")
                     logger.exception("Background task failed")
-            asyncio.create_task(_wrapper())
+
+            task = asyncio.create_task(_wrapper())
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
         async def on_mount(self) -> None:
             # Show UI immediately, do slow operations in background
@@ -398,16 +405,12 @@ try:
                 self.app.push_screen(MessageScreen(str(exc), "Connection Error"))
             self.refresh_data()
 
-        def _on_pairing_code(
-            self, code: str | None, manager: ScrcpyManager, ipport: str, name: str
-        ) -> None:
+        def _on_pairing_code(self, code: str | None, manager: ScrcpyManager, ipport: str, name: str) -> None:
             if code is None:
                 return
             self._run_bg(self._do_pair_and_connect(code, manager, ipport, name))
 
-        async def _do_pair_and_connect(
-            self, code: str, manager: ScrcpyManager, ipport: str, name: str
-        ) -> None:
+        async def _do_pair_and_connect(self, code: str, manager: ScrcpyManager, ipport: str, name: str) -> None:
             self.status_message = f"Pairing with {name}..."
             try:
                 success, message = await _to_thread(lambda: manager.pair_device(ipport, code))
@@ -437,9 +440,7 @@ try:
                     return
 
                 self.app.notify(f"Found connection port: {connect_device.ipport}")
-                await self._do_discover_connect(
-                    (manager, connect_device.ipport, name, connect_device.service_type)
-                )
+                await self._do_discover_connect((manager, connect_device.ipport, name, connect_device.service_type))
             except Exception as exc:
                 self.app.push_screen(MessageScreen(str(exc), "Pairing Error"))
             self.refresh_data()
@@ -519,25 +520,28 @@ try:
             if not devices:
                 self.app.push_screen(MessageScreen("No connected devices found.", "Camera Mode"))
                 return
+            if len(devices) == 1:
+                self._open_camera_setup(devices[0])
+                return
             self.app.push_screen(
-                CameraSetupScreen(),
-                self._on_camera_result,
+                DeviceSelectScreen(devices, "Camera Mode Device"),
+                lambda device: self._open_camera_setup(device) if device else None,
             )
 
-        def _on_camera_result(self, result: list[str] | None) -> None:
+        def _open_camera_setup(self, device: Device) -> None:
+            self.app.push_screen(
+                CameraSetupScreen(),
+                lambda result: self._on_camera_result(result, device),
+            )
+
+        def _on_camera_result(self, result: list[str] | None, device: Device) -> None:
             if result is None:
                 return
-            self._run_bg(self._do_camera_launch(result))
+            self._run_bg(self._do_camera_launch(result, device))
 
-        async def _do_camera_launch(self, result: list[str]) -> None:
+        async def _do_camera_launch(self, result: list[str], selected: Device) -> None:
             preset = result[0]
             extra_args = result[1:]
-            devices = await _to_thread(self.manager.list_devices)
-            if not devices:
-                self.app.push_screen(MessageScreen("No devices found.", "Camera Mode"))
-                return
-            # Use first device for simplicity; could add device selection screen
-            selected = devices[0]
             settings = self.manager.get_quality_settings(preset)
             args = ["-s", selected.serial, *extra_args]
             if settings.get("video_bitrate"):
@@ -552,22 +556,48 @@ try:
             if not devices:
                 self.app.push_screen(MessageScreen("No connected devices found.", "Quick App"))
                 return
+            if len(devices) == 1:
+                self._open_quickapp_setup(devices[0])
+                return
             self.app.push_screen(
-                QuickAppScreen(),
-                self._on_quickapp_result,
+                DeviceSelectScreen(devices, "Quick App Device"),
+                lambda device: self._open_quickapp_setup(device) if device else None,
             )
 
-        def _on_quickapp_result(self, result: list[str] | None) -> None:
+        def _open_quickapp_setup(self, device: Device) -> None:
+            self.app.push_screen(
+                QuickAppScreen(),
+                lambda result: self._on_quickapp_result(result, device),
+            )
+
+        def _on_quickapp_result(self, result: list[str] | None, device: Device) -> None:
             if result is None:
                 return
-            self._run_bg(self._do_quickapp_launch(result))
+            self._run_bg(self._do_quickapp_launch(result, device))
 
-        async def _do_quickapp_launch(self, result: list[str]) -> None:
-            devices = await _to_thread(self.manager.list_devices)
-            if not devices:
-                self.app.push_screen(MessageScreen("No devices found.", "Quick App"))
+        async def _do_quickapp_launch(self, result: list[str], selected: Device) -> None:
+            if result and result[0] == "__ADB_START_APP__":
+                package_name = result[1]
+                completed = await _to_thread(
+                    lambda: self.manager.adb(
+                        "-s",
+                        selected.serial,
+                        "shell",
+                        "monkey",
+                        "-p",
+                        package_name,
+                        "-c",
+                        "android.intent.category.LAUNCHER",
+                        "1",
+                    )
+                )
+                output = (completed.stdout or completed.stderr or "").strip()
+                if completed.returncode == 0:
+                    self.app.notify(f"Launched {package_name}")
+                else:
+                    self.app.push_screen(MessageScreen(output or "ADB app launch failed.", "Quick App Error"))
+                self.refresh_data()
                 return
-            selected = devices[0]
             args = ["-s", selected.serial, *result]
             args.extend(["--window-title", f"scrcpy - {selected.display_name} (App)"])
             self._run_scrcpy(args)
@@ -693,6 +723,10 @@ try:
             margin-top: 1;
             margin-bottom: 1;
         }
+        #profile-edit-scroll {
+            height: 1fr;
+            max-height: 70%;
+        }
         """
 
         def __init__(self, manager: ScrcpyManager) -> None:
@@ -721,9 +755,9 @@ if __name__ == "__main__":
         run_tui(manager)
     except ImportError as exc:
         print(exc)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except SystemExit:
         raise
     except Exception as exc:
         print(f"Error: {exc}")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc

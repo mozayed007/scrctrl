@@ -352,12 +352,12 @@ class LegacyMenu(ScrcpyManager):
         fields: dict[str, str] = {}
         for field in PROFILE_FIELDS:
             if field.type == "bool":
-                default_val = is_profile_bool_yes(defaults.get(field.name, field.default))
-                fields[field.name] = "yes" if prompt_yes_no(field.label, default=default_val) else ""
+                bool_default = is_profile_bool_yes(defaults.get(field.name, field.default))
+                fields[field.name] = "yes" if prompt_yes_no(field.label, default=bool_default) else ""
             elif field.type == "choice":
-                default_val = defaults.get(field.name, "")
+                choice_default = defaults.get(field.name, "")
                 choices_str = "/".join(field.choices)
-                fields[field.name] = prompt(f"{field.label} ({choices_str}, leave empty)", default_val)
+                fields[field.name] = prompt(f"{field.label} ({choices_str}, leave empty)", choice_default)
             else:
                 fields[field.name] = prompt(field.label, defaults.get(field.name, field.default))
         return fields

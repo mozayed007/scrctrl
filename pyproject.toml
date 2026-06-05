@@ -50,10 +50,14 @@ Issues = "https://github.com/mozayed007/scrctrl/issues"
 [project.scripts]
 scrctrl = "scrcpy_cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["scrcpy_*"]
-exclude = ["scripts*", "tests*", "legacy*", "config*", "bin*"]
+[tool.setuptools]
+py-modules = [
+    "scrcpy_cli",
+    "scrcpy_legacy_menu",
+    "scrcpy_manager",
+    "scrcpy_tui",
+    "scrcpy_tui_screens",
+]
 
 [tool.ruff]
 target-version = "py39"

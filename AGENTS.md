@@ -36,7 +36,7 @@ The manager is the single source of truth for all scrcpy argument building.
 - `video_codec` — `h264` | `h265` | `av1` | empty (uses quality preset)
 - `audio_codec` — `opus` | `aac` | `flac` | `raw` | empty
 - `audio_source` — `output` | `playback` | `mic` | `mic-unprocessed` | ... | empty
-- `render_fit` — `letterbox` | `stretched` | `unscaled` | empty
+- `render_fit` — `auto` | `stretch` | `crop` | `letterbox` | empty
 - `orientation` — `0` | `90` | `180` | `270` | `flip0` | `flip90` | `flip180` | `flip270` | empty
 - `window_aspect_ratio_lock` — `yes` (default) | `no`
 
@@ -50,7 +50,7 @@ The manager is the single source of truth for all scrcpy argument building.
 
 ### Recording
 - `record` — File path → `--record=<path>`
-- `record_format` — `mp4` | `mkv` | `m4a` | `mka` | `opus` | `aac` | `flac` | `wav` → `--record-format=<fmt>`
+- `record_format` — `mp4` | `mkv` | `m4a` | `mka` | `opus` | `aac` | `flac` | `wav` | `raw` → `--record-format=<fmt>`
 
 ### Boolean Normalization
 Profile booleans use `is_profile_bool_yes(value)` which accepts:

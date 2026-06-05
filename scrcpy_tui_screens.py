@@ -3,29 +3,23 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
-
 from scrcpy_manager import (
     AUDIO_CODECS,
-    AUDIO_SOURCES,
-    DEFAULT_MODE,
-    DEFAULT_QUALITY,
-    MODES,
-    ORIENTATIONS,
-    QUALITY_PRESETS,
-    RECORD_FORMATS,
-    RENDER_FITS,
-    VIDEO_CODECS,
-    ProfileField,
     PROFILE_FIELDS,
+    QUALITY_PRESETS,
+    VIDEO_CODECS,
+    Device,
     ScrcpyManager,
     is_profile_bool_yes,
+    is_valid_camera_id,
+    is_valid_new_display,
+    is_valid_package_name,
     sanitize_profile_name,
 )
 
 try:
     from textual.app import ComposeResult
-    from textual.containers import Horizontal
+    from textual.containers import Horizontal, VerticalScroll
     from textual.screen import ModalScreen
     from textual.widgets import (
         Button,
@@ -122,21 +116,22 @@ if TEXTUAL_AVAILABLE:
             yield Static("Profile ID (no spaces)", classes="label")
             yield Input(value=self.profile.get("name", ""), id="profile_id", disabled=is_edit)
 
-            current_section = ""
-            for field in PROFILE_FIELDS:
-                if field.section and field.section != current_section:
-                    current_section = field.section
-                    yield Static(f"▸ {field.section}", classes="section-header")
+            with VerticalScroll(id="profile-edit-scroll"):
+                current_section = ""
+                for field in PROFILE_FIELDS:
+                    if field.section and field.section != current_section:
+                        current_section = field.section
+                        yield Static(f"> {field.section}", classes="section-header")
 
-                yield Static(field.label, classes="label")
-                if field.type == "choice":
-                    choices = [("", "")] + [(c, c) for c in field.choices]
-                    yield Select(choices, value=self.profile.get(field.name, field.default), id=field.name)
-                elif field.type == "bool":
-                    val = is_profile_bool_yes(self.profile.get(field.name, field.default))
-                    yield Checkbox(field.label, value=val, id=field.name)
-                else:
-                    yield Input(value=self.profile.get(field.name, field.default), id=field.name)
+                    yield Static(field.label, classes="label")
+                    if field.type == "choice":
+                        choices = [("", "")] + [(c, c) for c in field.choices]
+                        yield Select(choices, value=self.profile.get(field.name, field.default), id=field.name)
+                    elif field.type == "bool":
+                        val = is_profile_bool_yes(self.profile.get(field.name, field.default))
+                        yield Checkbox(field.label, value=val, id=field.name)
+                    else:
+                        yield Input(value=self.profile.get(field.name, field.default), id=field.name)
 
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Save", id="save", variant="primary")
@@ -150,21 +145,28 @@ if TEXTUAL_AVAILABLE:
                 if not profile_id:
                     self.app.notify("Profile ID is required.", severity="error")
                     return
+                if sanitize_profile_name(profile_id) != profile_id:
+                    self.app.notify("Profile ID can only contain letters and numbers.", severity="error")
+                    return
 
                 result: dict[str, str] = {"name": profile_id}
                 for field in PROFILE_FIELDS:
                     if field.type == "bool":
-                        widget = self.query_one(f"#{field.name}", Checkbox)
-                        result[field.name] = "yes" if widget.value else ""
+                        bool_widget = self.query_one(f"#{field.name}", Checkbox)
+                        result[field.name] = "yes" if bool_widget.value else ""
                     elif field.type == "choice":
-                        widget = self.query_one(f"#{field.name}", Select)
-                        result[field.name] = str(widget.value)
+                        choice_widget = self.query_one(f"#{field.name}", Select)
+                        result[field.name] = str(choice_widget.value)
                     else:
-                        widget = self.query_one(f"#{field.name}", Input)
-                        result[field.name] = widget.value.strip()
+                        text_widget = self.query_one(f"#{field.name}", Input)
+                        result[field.name] = text_widget.value.strip()
 
                 if not result.get("ip") and not result.get("serial"):
                     self.app.notify("Profile must have either an IP or serial.", severity="error")
+                    return
+                new_display = result.get("new_display", "")
+                if new_display and not is_valid_new_display(new_display):
+                    self.app.notify("New display must look like 1920x1080 or 1920x1080/160.", severity="error")
                     return
 
                 self.dismiss(result)
@@ -257,8 +259,9 @@ if TEXTUAL_AVAILABLE:
                 q = str(self.query_one("#override_quality", Select).value)
                 if q:
                     settings = self.manager.get_quality_settings(q)
-                    bitrate = settings.get("video_bitrate", "8M")
-                    extra.append(f"--video-bit-rate={bitrate}")
+                    from scrcpy_manager import quality_settings_to_scrcpy_args
+
+                    extra.extend(quality_settings_to_scrcpy_args(settings, include_codec_source=True))
                 vc = str(self.query_one("#override_video_codec", Select).value)
                 if vc:
                     extra.append(f"--video-codec={vc}")
@@ -316,6 +319,9 @@ if TEXTUAL_AVAILABLE:
             elif event.button.id == "launch":
                 args: list[str] = []
                 camera_id = self.query_one("#camera_id", Input).value.strip() or "0"
+                if not is_valid_camera_id(camera_id):
+                    self.app.notify("Camera ID must be a non-negative integer.", severity="error")
+                    return
                 args.extend(["--video-source=camera", f"--camera-id={camera_id}"])
                 facing = str(self.query_one("#camera_facing", Select).value)
                 if facing:
@@ -329,6 +335,9 @@ if TEXTUAL_AVAILABLE:
                 preset = quality_map.get(quality_val, "camera_balanced")
                 fps = self.query_one("#camera_fps", Input).value.strip()
                 if fps:
+                    if not fps.isdigit() or int(fps) <= 0:
+                        self.app.notify("Camera FPS must be a positive integer.", severity="error")
+                        return
                     args.append(f"--camera-fps={fps}")
                 if self.query_one("#camera_high_speed", Checkbox).value:
                     args.append("--camera-high-speed")
@@ -336,8 +345,46 @@ if TEXTUAL_AVAILABLE:
                     args.append("--camera-torch")
                 zoom = self.query_one("#zoom", Input).value.strip()
                 if zoom:
+                    try:
+                        if float(zoom) <= 0:
+                            raise ValueError
+                    except ValueError:
+                        self.app.notify("Camera zoom must be a positive number.", severity="error")
+                        return
                     args.append(f"--camera-zoom={zoom}")
                 self.dismiss([preset, *args])
+
+    class DeviceSelectScreen(ModalScreen[Device | None]):
+        """Modal screen to select one connected device."""
+
+        def __init__(self, devices: list[Device], title: str = "Select Device") -> None:
+            self.devices = devices
+            self.title_text = title
+            super().__init__()
+
+        def compose(self) -> ComposeResult:
+            yield Static(self.title_text, classes="dialog-title")
+            table: DataTable = DataTable(id="device-select-table")
+            table.add_columns("#", "Name", "Type", "Serial", "Model")
+            table.cursor_type = "row"
+            table.zebra_stripes = True
+            for index, device in enumerate(self.devices, 1):
+                table.add_row(str(index), device.display_name, device.kind, device.serial, device.model or "Unknown")
+            yield table
+            with Horizontal(classes="dialog-buttons"):
+                yield Button("Select", id="select", variant="primary")
+                yield Button("Cancel", id="cancel", variant="default")
+
+        def on_button_pressed(self, event: Button.Pressed) -> None:
+            if event.button.id == "cancel":
+                self.dismiss(None)
+            elif event.button.id == "select":
+                table = self.query_one("#device-select-table", DataTable)
+                row = table.cursor_row
+                if row is None or not (0 <= row < len(self.devices)):
+                    self.app.notify("Select a device.", severity="error")
+                    return
+                self.dismiss(self.devices[row])
 
     class QuickAppScreen(ModalScreen[list[str] | None]):
         """Modal screen for quick app launcher."""
@@ -373,11 +420,22 @@ if TEXTUAL_AVAILABLE:
                 if not package:
                     self.app.notify("Package name is required.", severity="error")
                     return
+                if not is_valid_package_name(package):
+                    self.app.notify("Package name must look like com.example.app.", severity="error")
+                    return
                 mode_val = str(self.query_one("#mode", Select).value)
+                if mode_val == "3":
+                    self.dismiss(["__ADB_START_APP__", package])
+                    return
                 args: list[str] = [f"--start-app={package}"]
                 if mode_val == "2":
                     display_spec = self.query_one("#new_display_spec", Input).value.strip()
                     if display_spec:
+                        if not is_valid_new_display(display_spec):
+                            self.app.notify(
+                                "Virtual display must look like 1920x1080 or 1920x1080/160.", severity="error"
+                            )
+                            return
                         args.append(f"--new-display={display_spec}")
                     else:
                         args.append("--new-display")

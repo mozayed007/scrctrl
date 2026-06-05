@@ -101,6 +101,12 @@ scrctrl quick
 scrctrl detect
 ```
 
+To install the package and the optional TUI dependency together:
+
+```bash
+pip install -e ".[tui]"
+```
+
 ---
 
 ## :zap: Quick Start
@@ -147,10 +153,13 @@ python scrcpy_cli.py menu
 python scrcpy_cli.py launch MainPhone
 
 # Launch with one-off overrides (e.g., H265 for better quality, flex display)
-python scrcpy_cli.py launch MainPhone --video-codec=h265 --flex-display
+python scrcpy_cli.py launch MainPhone --quality=high --video-codec=h265 --flex-display
 python scrcpy_cli.py launch MainPhone --no-control --orientation=90
 python scrcpy_cli.py launch MainPhone --record=session.mp4 --record-format=mp4
 python scrcpy_cli.py launch MainPhone --new-display=1920x1080/160 --flex-display
+
+# Quick-launch accepts the same one-off overrides as launch
+python scrcpy_cli.py quick MainPhone --quality=ultra --render-fit=letterbox
 
 # Find wireless-debuggable devices
 python scrcpy_cli.py discover
@@ -346,7 +355,7 @@ record_format=
 | `video_codec` | `h264` (default), `h265` (better quality), `av1` |
 | `audio_codec` | `opus` (default), `aac`, `flac`, `raw` |
 | `audio_source` | `output` (default), `playback`, `mic`, `mic-unprocessed`, ... |
-| `render_fit` | `letterbox` (default), `stretched`, `unscaled` |
+| `render_fit` | `auto`, `stretch`, `crop`, `letterbox` |
 | `window_aspect_ratio_lock` | `yes` (default) or `no` |
 | `orientation` | `0`, `90`, `180`, `270`, `flip0`, `flip90`, `flip180`, `flip270` |
 | `no_control` | `yes` for view-only mode |
@@ -354,7 +363,7 @@ record_format=
 | `flex_display` | `yes` to make virtual display resizable with window |
 | `new_display` | Virtual display spec, e.g. `1920x1080/160` |
 | `record` | File path to auto-record every session |
-| `record_format` | `mp4`, `mkv`, `m4a`, `mka`, `opus`, `aac`, `flac`, `wav` |
+| `record_format` | `mp4`, `mkv`, `m4a`, `mka`, `opus`, `aac`, `flac`, `wav`, `raw` |
 
 ### Network Auto-Discovery
 
@@ -390,7 +399,9 @@ Already paired devices:
 | `S` | Setup wireless |
 | `C` | Camera mode |
 | `P` | Quick App Launcher |
+| `O` | Launch selected profile with one-off options |
 | `R` | Refresh |
+| `U` | Update scrcpy/adb |
 | `X` | Shutdown ADB |
 | `Q` | Quit |
 
@@ -405,7 +416,9 @@ Already paired devices:
 | `F` | Discover devices (mDNS) |
 | `S` | Setup wireless |
 | `C` | Camera mode |
+| `P` | Quick app launcher |
 | `R` | Refresh |
+| `X` | Shutdown ADB |
 | `Q` | Quit |
 
 ### Quality Presets
@@ -444,9 +457,12 @@ Example `userprefs.ini`:
 ```ini
 [preferences]
 quick_launch_timeout=3
+auto_check_updates=yes
+auto_install_updates=yes
 ```
 
 Set `quick_launch_timeout=0` to disable the quick-launch prompt at startup.
+Set `auto_check_updates=no` to disable startup update checks. Set `auto_install_updates=no` to show update notices without prompting for install.
 
 ### Architecture
 
@@ -513,6 +529,8 @@ scrctrl/
 │   └── bin-vX.X-backup/
 └── .github/                   # GitHub workflows & templates
 ```
+
+Local agent folders and Node helper installs (`.agents\`, `.claude\`, `node_modules\`, `package.json`, `bun.lock`) are intentionally ignored; they are not part of the Python app.
 
 ### Troubleshooting
 

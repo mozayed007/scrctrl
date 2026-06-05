@@ -198,6 +198,35 @@ def quote_command(parts: Sequence[str]) -> str:
     return " ".join(shlex.quote(part) for part in parts)
 
 
+def quality_settings_to_scrcpy_args(
+    settings: dict[str, str],
+    *,
+    include_codec_source: bool = False,
+) -> list[str]:
+    """Convert quality preset settings into scrcpy command-line flags."""
+    args: list[str] = []
+    if settings.get("video_bitrate"):
+        args.append(f"--video-bit-rate={settings['video_bitrate']}")
+    if settings.get("max_fps"):
+        args.append(f"--max-fps={settings['max_fps']}")
+    if settings.get("audio_buffer"):
+        args.append(f"--audio-output-buffer={settings['audio_buffer']}")
+    if settings.get("audio_delay"):
+        args.append(f"--audio-buffer={settings['audio_delay']}")
+    if settings.get("video_buffer"):
+        args.append(f"--video-buffer={settings['video_buffer']}")
+    if settings.get("resolution"):
+        args.append(f"--max-size={resolution_to_max_size(settings['resolution'])}")
+    if include_codec_source:
+        if settings.get("video_codec"):
+            args.append(f"--video-codec={settings['video_codec']}")
+        if settings.get("audio_codec"):
+            args.append(f"--audio-codec={settings['audio_codec']}")
+        if settings.get("audio_source"):
+            args.append(f"--audio-source={settings['audio_source']}")
+    return args
+
+
 def is_valid_ipv4(ip: str) -> bool:
     """Validate IPv4 address format.
 
@@ -277,6 +306,36 @@ def is_valid_choice(value: str, choices: Iterable[str]) -> bool:
     return value.strip().lower() in {c.lower() for c in choices}
 
 
+def is_valid_video_codec(value: str) -> bool:
+    """Validate a video codec name."""
+    return is_valid_choice(value, VIDEO_CODECS)
+
+
+def is_valid_audio_codec(value: str) -> bool:
+    """Validate an audio codec name."""
+    return is_valid_choice(value, AUDIO_CODECS)
+
+
+def is_valid_audio_source(value: str) -> bool:
+    """Validate an audio source name."""
+    return is_valid_choice(value, AUDIO_SOURCES)
+
+
+def is_valid_render_fit(value: str) -> bool:
+    """Validate a render fit mode."""
+    return is_valid_choice(value, RENDER_FITS)
+
+
+def is_valid_orientation(value: str) -> bool:
+    """Validate an orientation value."""
+    return is_valid_choice(value, ORIENTATIONS)
+
+
+def is_valid_record_format(value: str) -> bool:
+    """Validate a recording format."""
+    return is_valid_choice(value, RECORD_FORMATS)
+
+
 def is_valid_new_display(value: str) -> bool:
     """Validate new display specification.
 
@@ -288,7 +347,6 @@ def is_valid_new_display(value: str) -> bool:
     """
     if not value:
         return True
-    # Format: WIDTHxHEIGHT or WIDTHxHEIGHT/DPI
     parts = value.split("/")
     if len(parts) == 2:
         res, dpi = parts
@@ -338,20 +396,97 @@ PROFILE_FIELDS: list[ProfileField] = [
     ProfileField("serial", "USB serial", "str"),
     ProfileField("quality", "Quality", "choice", default="balanced", choices=tuple(QUALITY_PRESETS)),
     ProfileField("mode", "Mode", "choice", default="mirror", choices=tuple(MODES)),
-    ProfileField("keep_active", "Keep device active", "bool", section="Behavior & Control", scrcpy_flag="--keep-active"),
-    ProfileField("background_color", "Background color", "str", section="Display & Window", scrcpy_flag="--background-color"),
-    ProfileField("video_codec", "Video codec", "choice", section="Streaming & Codecs", choices=tuple(VIDEO_CODECS), scrcpy_flag="--video-codec", preset_key="video_codec"),
-    ProfileField("audio_codec", "Audio codec", "choice", section="Streaming & Codecs", choices=tuple(AUDIO_CODECS), scrcpy_flag="--audio-codec", preset_key="audio_codec"),
-    ProfileField("audio_source", "Audio source", "choice", section="Streaming & Codecs", choices=tuple(AUDIO_SOURCES), scrcpy_flag="--audio-source", preset_key="audio_source"),
-    ProfileField("render_fit", "Render fit", "choice", section="Display & Window", choices=tuple(RENDER_FITS), scrcpy_flag="--render-fit"),
-    ProfileField("window_aspect_ratio_lock", "Lock window aspect ratio", "bool", section="Display & Window", default="yes", bool_style="negative", scrcpy_flag="--no-window-aspect-ratio-lock"),
-    ProfileField("orientation", "Orientation", "choice", section="Display & Window", choices=tuple(ORIENTATIONS), scrcpy_flag="--orientation"),
+    ProfileField(
+        "keep_active", "Keep device active", "bool", section="Behavior & Control", scrcpy_flag="--keep-active"
+    ),
+    ProfileField(
+        "background_color", "Background color", "str", section="Display & Window", scrcpy_flag="--background-color"
+    ),
+    ProfileField(
+        "video_codec",
+        "Video codec",
+        "choice",
+        section="Streaming & Codecs",
+        choices=tuple(VIDEO_CODECS),
+        scrcpy_flag="--video-codec",
+        preset_key="video_codec",
+    ),
+    ProfileField(
+        "audio_codec",
+        "Audio codec",
+        "choice",
+        section="Streaming & Codecs",
+        choices=tuple(AUDIO_CODECS),
+        scrcpy_flag="--audio-codec",
+        preset_key="audio_codec",
+    ),
+    ProfileField(
+        "audio_source",
+        "Audio source",
+        "choice",
+        section="Streaming & Codecs",
+        choices=tuple(AUDIO_SOURCES),
+        scrcpy_flag="--audio-source",
+        preset_key="audio_source",
+    ),
+    ProfileField(
+        "render_fit",
+        "Render fit",
+        "choice",
+        section="Display & Window",
+        choices=tuple(RENDER_FITS),
+        scrcpy_flag="--render-fit",
+    ),
+    ProfileField(
+        "window_aspect_ratio_lock",
+        "Lock window aspect ratio",
+        "bool",
+        section="Display & Window",
+        default="yes",
+        bool_style="negative",
+        scrcpy_flag="--no-window-aspect-ratio-lock",
+    ),
+    ProfileField(
+        "orientation",
+        "Orientation",
+        "choice",
+        section="Display & Window",
+        choices=tuple(ORIENTATIONS),
+        scrcpy_flag="--orientation",
+    ),
     ProfileField("no_control", "Disable control", "bool", section="Behavior & Control", scrcpy_flag="--no-control"),
-    ProfileField("power_off_on_close", "Power off on close", "bool", section="Behavior & Control", scrcpy_flag="--power-off-on-close"),
-    ProfileField("flex_display", "Flex display", "bool", section="Display & Window", scrcpy_flag="--flex-display", mode_excludes=("otg",)),
-    ProfileField("new_display", "New display", "str", section="Display & Window", scrcpy_flag="--new-display", mode_excludes=("otg",)),
+    ProfileField(
+        "power_off_on_close",
+        "Power off on close",
+        "bool",
+        section="Behavior & Control",
+        scrcpy_flag="--power-off-on-close",
+    ),
+    ProfileField(
+        "flex_display",
+        "Flex display",
+        "bool",
+        section="Display & Window",
+        scrcpy_flag="--flex-display",
+        mode_excludes=("otg",),
+    ),
+    ProfileField(
+        "new_display",
+        "New display",
+        "str",
+        section="Display & Window",
+        scrcpy_flag="--new-display",
+        mode_excludes=("otg",),
+    ),
     ProfileField("record", "Record file", "str", section="Recording", scrcpy_flag="--record"),
-    ProfileField("record_format", "Record format", "choice", section="Recording", choices=tuple(RECORD_FORMATS), scrcpy_flag="--record-format"),
+    ProfileField(
+        "record_format",
+        "Record format",
+        "choice",
+        section="Recording",
+        choices=tuple(RECORD_FORMATS),
+        scrcpy_flag="--record-format",
+    ),
 ]
 
 
@@ -829,6 +964,7 @@ class ScrcpyManager:
         connection: str,
         connection_type: str,
         mode_override: str | None = None,
+        quality_override: str | None = None,
         extra: Iterable[str] = (),
     ) -> list[str]:
         """Build scrcpy command line arguments from profile settings.
@@ -843,7 +979,7 @@ class ScrcpyManager:
         Returns:
             List of scrcpy command line arguments
         """
-        settings = self.get_quality_settings(profile["quality"])
+        settings = self.get_quality_settings(quality_override or profile["quality"])
         args: list[str] = []
         if connection:
             args.extend(["-s", connection])
@@ -854,18 +990,7 @@ class ScrcpyManager:
         args.extend(["--window-title", title])
 
         # Quality settings from quality.ini
-        if settings["video_bitrate"]:
-            args.append(f"--video-bit-rate={settings['video_bitrate']}")
-        if settings["max_fps"]:
-            args.append(f"--max-fps={settings['max_fps']}")
-        if settings["audio_buffer"]:
-            args.append(f"--audio-output-buffer={settings['audio_buffer']}")
-        if settings.get("audio_delay", ""):
-            args.append(f"--audio-buffer={settings['audio_delay']}")
-        if settings.get("video_buffer", ""):
-            args.append(f"--video-buffer={settings['video_buffer']}")
-        if settings["resolution"]:
-            args.append(f"--max-size={resolution_to_max_size(settings['resolution'])}")
+        args.extend(quality_settings_to_scrcpy_args(settings))
 
         # Mode
         if mode == "otg":
@@ -969,6 +1094,7 @@ class ScrcpyManager:
         connection_type: str | None = None,
         extra: Iterable[str] = (),
         mode_override: str | None = None,
+        quality_override: str | None = None,
         detach: bool = False,
     ) -> int | subprocess.Popen:
         """Launch scrcpy for a saved profile.
@@ -1029,6 +1155,7 @@ class ScrcpyManager:
             connection_type=resolved_type,
             extra=extra,
             mode_override=mode_override,
+            quality_override=quality_override,
         )
         if not detach:
             print("\nLaunching scrcpy")
@@ -1037,6 +1164,8 @@ class ScrcpyManager:
             print(f"Connection: {resolved_connection}")
             print(f"Type:       {resolved_type}")
             print(f"Quality:    {profile['quality']}")
+            if quality_override:
+                print(f"Override quality: {quality_override}")
             print(f"Mode:       {profile.get('mode', DEFAULT_MODE)}")
             for field in PROFILE_FIELDS:
                 if field.name in ("nickname", "ip", "serial", "quality", "mode"):
@@ -1053,6 +1182,8 @@ class ScrcpyManager:
     def quick_launch(
         self,
         profile_name: str | None = None,
+        extra: Iterable[str] = (),
+        quality_override: str | None = None,
         detach: bool = False,
     ) -> int | subprocess.Popen:
         """Quick launch a profile or the last used device.
@@ -1068,7 +1199,12 @@ class ScrcpyManager:
             RuntimeError: If no last used profile found or connection fails
         """
         if profile_name:
-            return self.launch_profile(profile_name, detach=detach)
+            return self.launch_profile(
+                profile_name,
+                extra=extra,
+                quality_override=quality_override,
+                detach=detach,
+            )
 
         parser = self.get_last_used()
         last_profile = parser.get("lastused", "profile", fallback="").strip()
@@ -1087,6 +1223,8 @@ class ScrcpyManager:
             last_profile,
             connection=last_connection,
             connection_type=last_type,
+            extra=extra,
+            quality_override=quality_override,
             detach=detach,
         )
 
