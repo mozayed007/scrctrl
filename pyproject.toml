@@ -55,6 +55,7 @@ scrctrl-mcp = "scrcpy_mcp:main"
 [tool.setuptools]
 py-modules = [
     "scrcpy_agent",
+    "scrcpy_capabilities",
     "scrcpy_cli",
     "scrcpy_legacy_menu",
     "scrcpy_manager",

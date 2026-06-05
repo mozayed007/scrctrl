@@ -196,13 +196,24 @@ python scrcpy_cli.py agent devices --json
 python scrcpy_cli.py agent profiles --json
 python scrcpy_cli.py agent build-command MainPhone --quality high --extra=--no-control --json
 
+# Inspect scrcpy-native capabilities and generate exact recipe args
+python scrcpy_cli.py agent scrcpy-version --json
+python scrcpy_cli.py agent scrcpy-shortcuts --json
+python scrcpy_cli.py agent scrcpy-features --json
+python scrcpy_cli.py agent scrcpy-recipe virtual-app --package org.videolan.vlc --json
+python scrcpy_cli.py agent validate-scrcpy-args --json -- --no-control --new-display
+
 # Start an Android control session for curated ADB actions
 python scrcpy_cli.py agent session-start MainPhone "Inspect the Settings app" --allowed-package com.android.settings --observe-only --json
+python scrcpy_cli.py agent screenshot <session_id> --json
+python scrcpy_cli.py agent dump-ui <session_id> --json
 ```
 
-Agent code lives in `scrcpy_agent.py`; the MCP JSON-RPC entrypoint lives in `scrcpy_mcp.py`. The MCP server exposes ScrCtrl resources for devices, profiles, presets, last-used state, and capabilities, plus curated tools for discovery, launching, screenshots, UI dumps, taps, swipes, typing, keyevents, app starts, waits, and approval-gated risky actions.
+Agent code lives in `scrcpy_agent.py`; the scrcpy knowledge catalog lives in `scrcpy_capabilities.py`; the MCP JSON-RPC entrypoint lives in `scrcpy_mcp.py`. The MCP server exposes ScrCtrl resources for devices, profiles, presets, last-used state, capabilities, scrcpy shortcuts/features/options/recipes, plus curated tools for discovery, launching, screenshots, UI dumps, taps, swipes, typing, keyevents, app starts, waits, approval-gated risky actions, and safe scrcpy list modes.
 
 Android CUA sessions use direct ADB screenshots and `adb shell input` commands, so coordinates match the device display rather than a cropped desktop mirror. Scrcpy remains useful as a human watch window or recording surface.
+
+CLI sessions persist under `%TEMP%\scrctrl-agent\sessions`, so the same `session_id` can be reused across separate `scrctrl agent` commands. See [`docs/agent-cua-smoke.md`](docs/agent-cua-smoke.md) for a live-device smoke workflow.
 
 ### Convenience Wrappers
 
@@ -380,14 +391,32 @@ record_format=
 | `audio_codec` | `opus` (default), `aac`, `flac`, `raw` |
 | `audio_source` | `output` (default), `playback`, `mic`, `mic-unprocessed`, ... |
 | `render_fit` | `auto`, `stretch`, `crop`, `letterbox` |
+| `display_id` | Device display id for `--display-id` |
+| `crop` | Display crop as `WIDTH:HEIGHT:X:Y` |
+| `fullscreen` | `yes` to start fullscreen |
+| `always_on_top` | `yes` to keep scrcpy above other windows |
 | `window_aspect_ratio_lock` | `yes` (default) or `no` |
 | `orientation` | `0`, `90`, `180`, `270`, `flip0`, `flip90`, `flip180`, `flip270` |
+| `keyboard` | `disabled`, `sdk`, `uhid`, `aoa` |
+| `mouse` | `disabled`, `sdk`, `uhid`, `aoa` |
+| `gamepad` | `disabled`, `uhid`, `aoa` |
+| `shortcut_mod` | Shortcut modifier list, e.g. `rctrl` or `lctrl,lsuper` |
 | `no_control` | `yes` for view-only mode |
 | `power_off_on_close` | `yes` to turn screen off on exit |
+| `turn_screen_off` | `yes` to turn the device screen off immediately |
+| `show_touches` | `yes` to show physical touches |
+| `no_audio` | `yes` to disable audio forwarding |
+| `no_window` | `yes` to disable the scrcpy window |
 | `flex_display` | `yes` to make virtual display resizable with window |
 | `new_display` | Virtual display spec, e.g. `1920x1080/160` |
 | `record` | File path to auto-record every session |
 | `record_format` | `mp4`, `mkv`, `m4a`, `mka`, `opus`, `aac`, `flac`, `wav`, `raw` |
+| `camera_id` | Camera id for camera mode |
+| `camera_facing` | `front`, `back`, or `external` |
+| `camera_size` | Camera size, e.g. `1920x1080` |
+| `camera_fps` | Camera capture frame rate |
+| `camera_torch` | `yes` to enable torch when camera starts |
+| `camera_zoom` | Initial camera zoom value |
 
 ### Network Auto-Discovery
 

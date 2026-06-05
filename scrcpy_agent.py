@@ -21,8 +21,15 @@ from pathlib import Path
 from subprocess import Popen
 from typing import Any
 
+from scrcpy_capabilities import (
+    build_catalog,
+    get_scrcpy_version,
+    recommend_recipe,
+    validate_scrcpy_args,
+)
 from scrcpy_manager import (
     ADB_EXE,
+    BIN_DIR,
     DEFAULT_ADB_PORT,
     SCRCPY_EXE,
     Device,
@@ -31,6 +38,20 @@ from scrcpy_manager import (
     quote_command,
     sanitize_profile_name,
 )
+
+AGENT_ROOT = Path(tempfile.gettempdir()) / "scrctrl-agent"
+
+
+def default_agent_root() -> Path:
+    return AGENT_ROOT
+
+
+def default_agent_artifact_dir() -> Path:
+    return default_agent_root() / "artifacts"
+
+
+def default_agent_session_dir() -> Path:
+    return default_agent_root() / "sessions"
 
 KEYEVENTS: dict[str, str] = {
     "back": "KEYCODE_BACK",
@@ -139,6 +160,36 @@ class AndroidSession:
             "pending_approvals": list(self.pending_approvals),
         }
 
+    def to_storage(self) -> dict[str, Any]:
+        data = self.to_dict()
+        data["pending_approvals"] = self.pending_approvals
+        return data
+
+    @classmethod
+    def from_storage(cls, data: dict[str, Any]) -> AndroidSession:
+        session = cls(
+            session_id=str(data["session_id"]),
+            serial=str(data["serial"]),
+            goal=str(data.get("goal", "")),
+            allowed_packages=set(data.get("allowed_packages", [])),
+            observe_only=bool(data.get("observe_only", False)),
+            created_at=float(data.get("created_at", time.time())),
+            last_screenshot=str(data.get("last_screenshot", "")),
+            last_ui_dump=str(data.get("last_ui_dump", "")),
+            current_package=str(data.get("current_package", "")),
+            pending_approvals=dict(data.get("pending_approvals", {})),
+        )
+        session.action_log = [
+            AndroidActionLog(
+                action=str(item.get("action", "")),
+                status=str(item.get("status", "")),
+                timestamp=float(item.get("timestamp", 0.0)),
+                details=dict(item.get("details", {})),
+            )
+            for item in data.get("action_log", [])
+        ]
+        return session
+
 
 class AndroidComputer:
     """ADB-backed Android computer environment."""
@@ -146,7 +197,7 @@ class AndroidComputer:
     def __init__(self, manager: ScrcpyManager, serial: str, artifact_dir: Path | None = None) -> None:
         self.manager = manager
         self.serial = serial
-        self.artifact_dir = artifact_dir or Path(tempfile.gettempdir()) / "scrctrl-agent"
+        self.artifact_dir = artifact_dir or default_agent_artifact_dir()
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
 
     def screenshot(self, *, include_base64: bool = False) -> dict[str, Any]:
@@ -295,9 +346,18 @@ class AndroidComputer:
 class AgentService:
     """Prompt-free service layer for agent integrations."""
 
-    def __init__(self, manager: ScrcpyManager | None = None, artifact_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        manager: ScrcpyManager | None = None,
+        artifact_dir: Path | None = None,
+        session_dir: Path | None = None,
+    ) -> None:
         self.manager = manager or ScrcpyManager()
-        self.artifact_dir = artifact_dir or Path(tempfile.gettempdir()) / "scrctrl-agent"
+        self.artifact_dir = artifact_dir or default_agent_artifact_dir()
+        self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.session_dir = session_dir
+        if self.session_dir is not None:
+            self.session_dir.mkdir(parents=True, exist_ok=True)
         self.sessions: dict[str, AndroidSession] = {}
 
     def capabilities(self) -> dict[str, Any]:
@@ -312,6 +372,11 @@ class AgentService:
                 "scrctrl://quality-presets",
                 "scrctrl://last-used",
                 "scrctrl://agent/capabilities",
+                "scrctrl://scrcpy/version",
+                "scrctrl://scrcpy/features",
+                "scrctrl://scrcpy/options",
+                "scrctrl://scrcpy/shortcuts",
+                "scrctrl://scrcpy/recipes",
             ],
             "tools": [
                 "list_devices",
@@ -337,12 +402,27 @@ class AgentService:
                 "android_start_app",
                 "android_wait",
                 "approve_action",
+                "get_scrcpy_version",
+                "list_scrcpy_features",
+                "list_scrcpy_options",
+                "list_scrcpy_shortcuts",
+                "recommend_scrcpy_recipe",
+                "validate_scrcpy_args",
+                "list_apps",
+                "list_cameras",
+                "list_camera_sizes",
+                "list_displays",
+                "list_encoders",
             ],
             "safety": {
                 "default": "human approval for risky actions",
                 "observe_only_supported": True,
                 "package_allowlist_supported": True,
                 "arbitrary_adb_shell": False,
+            },
+            "paths": {
+                "artifact_dir": str(self.artifact_dir),
+                "session_dir": str(self.session_dir) if self.session_dir else "",
             },
         }
 
@@ -367,6 +447,51 @@ class AgentService:
     def get_last_used(self) -> dict[str, Any]:
         parser = self.manager.get_last_used()
         return {"last_used": dict(parser.items("lastused")) if parser.has_section("lastused") else {}}
+
+    def get_scrcpy_version(self) -> dict[str, Any]:
+        return {"scrcpy": get_scrcpy_version(SCRCPY_EXE)}
+
+    def list_scrcpy_features(self) -> dict[str, Any]:
+        return {"features": build_catalog(SCRCPY_EXE)["features"]}
+
+    def list_scrcpy_options(self) -> dict[str, Any]:
+        catalog = build_catalog(SCRCPY_EXE)
+        return {"version": catalog["version"], "options": catalog["options"]}
+
+    def list_scrcpy_shortcuts(self) -> dict[str, Any]:
+        return {"shortcuts": build_catalog(SCRCPY_EXE)["shortcuts"]}
+
+    def list_scrcpy_recipes(self) -> dict[str, Any]:
+        return {"recipes": build_catalog(SCRCPY_EXE)["recipes"]}
+
+    def recommend_scrcpy_recipe(
+        self,
+        name: str,
+        *,
+        package: str | None = None,
+        record_file: str | None = None,
+    ) -> dict[str, Any]:
+        return recommend_recipe(name, package=package, record_file=record_file, scrcpy_exe=SCRCPY_EXE)
+
+    def validate_scrcpy_args(self, args: list[str]) -> dict[str, Any]:
+        catalog = build_catalog(SCRCPY_EXE)
+        detected = set(catalog.get("help_detected_options", []))
+        return validate_scrcpy_args(args, known_options=detected or None)
+
+    def list_apps(self, serial: str) -> dict[str, Any]:
+        return self._scrcpy_list(serial, "--list-apps")
+
+    def list_cameras(self, serial: str) -> dict[str, Any]:
+        return self._scrcpy_list(serial, "--list-cameras")
+
+    def list_camera_sizes(self, serial: str) -> dict[str, Any]:
+        return self._scrcpy_list(serial, "--list-camera-sizes")
+
+    def list_displays(self, serial: str) -> dict[str, Any]:
+        return self._scrcpy_list(serial, "--list-displays")
+
+    def list_encoders(self, serial: str) -> dict[str, Any]:
+        return self._scrcpy_list(serial, "--list-encoders")
 
     def build_scrcpy_command(
         self,
@@ -515,6 +640,7 @@ class AgentService:
         session.current_package = AndroidComputer(self.manager, serial, self.artifact_dir).current_foreground_package()
         self.sessions[session.session_id] = session
         self._log(session, "session_start", "completed", {"profile_or_serial": profile_or_serial})
+        self._save_session(session)
         return {"session": session.to_dict()}
 
     def android_screenshot(self, session_id: str, *, include_base64: bool = False) -> dict[str, Any]:
@@ -522,6 +648,7 @@ class AgentService:
         result = AndroidComputer(self.manager, session.serial, self.artifact_dir).screenshot(include_base64=include_base64)
         session.last_screenshot = result["path"]
         self._log(session, "screenshot", "completed", {"path": result["path"]})
+        self._save_session(session)
         return {"session": session.to_dict(), "screenshot": result}
 
     def android_dump_ui(self, session_id: str) -> dict[str, Any]:
@@ -529,6 +656,7 @@ class AgentService:
         result = AndroidComputer(self.manager, session.serial, self.artifact_dir).dump_ui()
         session.last_ui_dump = result["path"]
         self._log(session, "dump_ui", "completed", {"path": result["path"], "node_count": result["node_count"]})
+        self._save_session(session)
         return {"session": session.to_dict(), "ui": result}
 
     def android_tap(self, session_id: str, x: int, y: int) -> dict[str, Any]:
@@ -554,6 +682,7 @@ class AgentService:
         session = self._session(session_id)
         result = AndroidComputer(self.manager, session.serial, self.artifact_dir).wait(seconds)
         self._log(session, "wait", "completed", {"seconds": seconds})
+        self._save_session(session)
         return {"session": session.to_dict(), "result": result}
 
     def approve_action(self, session_id: str, approval_id: str) -> dict[str, Any]:
@@ -563,6 +692,7 @@ class AgentService:
             raise ValueError(f"Approval '{approval_id}' was not found")
         result = self._execute_control(session, action["action"], action["params"])
         self._log(session, action["action"], result.get("status", "completed"), {"approval_id": approval_id, **action["params"]})
+        self._save_session(session)
         return {"session": session.to_dict(), "result": result}
 
     def _resolve_serial(self, profile_or_serial: str) -> str:
@@ -592,9 +722,11 @@ class AgentService:
         policy = self._check_policy(session, action, params)
         if policy:
             self._log(session, action, policy["status"], params)
+            self._save_session(session)
             return {"session": session.to_dict(), **policy}
         result = self._execute_control(session, action, params)
         self._log(session, action, result.get("status", "completed"), params)
+        self._save_session(session)
         return {"session": session.to_dict(), "result": result}
 
     def _execute_control(self, session: AndroidSession, action: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -662,8 +794,32 @@ class AgentService:
 
     def _session(self, session_id: str) -> AndroidSession:
         session = self.sessions.get(session_id)
+        if not session and self.session_dir is not None:
+            session = self._load_session(session_id)
         if not session:
             raise ValueError(f"Session '{session_id}' was not found")
+        return session
+
+    def _session_path(self, session_id: str) -> Path:
+        if self.session_dir is None:
+            raise RuntimeError("Session persistence is not enabled")
+        return self.session_dir / f"{session_id}.json"
+
+    def _save_session(self, session: AndroidSession) -> None:
+        if self.session_dir is None:
+            return
+        path = self._session_path(session.session_id)
+        path.write_text(json.dumps(session.to_storage(), indent=2, sort_keys=True), encoding="utf-8")
+
+    def _load_session(self, session_id: str) -> AndroidSession | None:
+        if self.session_dir is None:
+            return None
+        path = self._session_path(session_id)
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        session = AndroidSession.from_storage(data)
+        self.sessions[session.session_id] = session
         return session
 
     @staticmethod
@@ -677,6 +833,80 @@ class AgentService:
             result = func(*args, **kwargs)
         return result, buffer.getvalue().strip()
 
+    def _scrcpy_list(self, serial: str, list_flag: str) -> dict[str, Any]:
+        catalog = build_catalog(SCRCPY_EXE)
+        validation = validate_scrcpy_args([list_flag], known_options=set(catalog.get("help_detected_options", [])) or None)
+        if not validation["ok"]:
+            raise ValueError("; ".join(validation["errors"]))
+        completed = self.manager.run([str(SCRCPY_EXE), "-s", serial, list_flag], timeout=30)
+        output = "\n".join(part for part in [completed.stdout, completed.stderr] if part).strip()
+        return {
+            "serial": serial,
+            "flag": list_flag,
+            "returncode": completed.returncode,
+            "output": output,
+            "lines": [line for line in output.splitlines() if line.strip()],
+        }
+
 
 def to_json(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, sort_keys=True)
+
+
+def agent_doctor() -> dict[str, Any]:
+    """Check local agent prerequisites without requiring an interactive flow."""
+    artifact_dir = default_agent_artifact_dir()
+    session_dir = default_agent_session_dir()
+    checks: list[dict[str, Any]] = []
+
+    def add(name: str, ok: bool, **details: Any) -> None:
+        checks.append({"name": name, "ok": ok, **details})
+
+    add("bin_dir", BIN_DIR.exists(), path=str(BIN_DIR))
+    add("adb_binary", ADB_EXE.exists(), path=str(ADB_EXE))
+    add("scrcpy_binary", SCRCPY_EXE.exists(), path=str(SCRCPY_EXE))
+
+    for name, path in (("artifact_dir", artifact_dir), ("session_dir", session_dir)):
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".scrctrl-write-test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            add(name, True, path=str(path))
+        except OSError as exc:
+            add(name, False, path=str(path), error=str(exc))
+
+    manager: ScrcpyManager | None = None
+    if ADB_EXE.exists() and SCRCPY_EXE.exists():
+        try:
+            manager = ScrcpyManager()
+            add("manager_init", True)
+        except SystemExit as exc:
+            add("manager_init", False, error=str(exc))
+    else:
+        add("manager_init", False, error="Missing adb.exe or scrcpy.exe")
+
+    if manager is not None:
+        try:
+            version = manager.adb("version")
+            add("adb_version", version.returncode == 0, output=(version.stdout or version.stderr or "").strip())
+        except Exception as exc:
+            add("adb_version", False, error=str(exc))
+
+        try:
+            devices = manager.list_devices()
+            add("connected_devices", True, count=len(devices), devices=[asdict(device) for device in devices])
+        except Exception as exc:
+            add("connected_devices", False, error=str(exc))
+
+        try:
+            from scrcpy_mcp import ScrcpyMcpServer
+
+            server = ScrcpyMcpServer(AgentService(manager, artifact_dir=artifact_dir))
+            response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+            tool_count = len(response["result"]["tools"]) if response and "result" in response else 0
+            add("mcp_tools_list", tool_count > 0, tool_count=tool_count)
+        except Exception as exc:
+            add("mcp_tools_list", False, error=str(exc))
+
+    return {"ok": all(check["ok"] for check in checks), "checks": checks}

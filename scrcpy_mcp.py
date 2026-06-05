@@ -181,6 +181,57 @@ TOOLS: dict[str, dict[str, Any]] = {
             ["session_id", "approval_id"],
         ),
     },
+    "get_scrcpy_version": {
+        "description": "Return the bundled scrcpy version.",
+        "inputSchema": _schema({}),
+    },
+    "list_scrcpy_features": {
+        "description": "List curated scrcpy feature groups and agent use cases.",
+        "inputSchema": _schema({}),
+    },
+    "list_scrcpy_options": {
+        "description": "List curated scrcpy options with local help availability.",
+        "inputSchema": _schema({}),
+    },
+    "list_scrcpy_shortcuts": {
+        "description": "List scrcpy keyboard and mouse shortcuts.",
+        "inputSchema": _schema({}),
+    },
+    "recommend_scrcpy_recipe": {
+        "description": "Return recipe-generated scrcpy args for a known workflow.",
+        "inputSchema": _schema(
+            {
+                "name": {"type": "string"},
+                "package": {"type": "string"},
+                "record_file": {"type": "string"},
+            },
+            ["name"],
+        ),
+    },
+    "validate_scrcpy_args": {
+        "description": "Validate explicit scrcpy extra args against the bundled binary's option surface.",
+        "inputSchema": _schema({"args": {"type": "array", "items": {"type": "string"}}}, ["args"]),
+    },
+    "list_apps": {
+        "description": "Run scrcpy --list-apps for a device serial.",
+        "inputSchema": _schema({"serial": {"type": "string"}}, ["serial"]),
+    },
+    "list_cameras": {
+        "description": "Run scrcpy --list-cameras for a device serial.",
+        "inputSchema": _schema({"serial": {"type": "string"}}, ["serial"]),
+    },
+    "list_camera_sizes": {
+        "description": "Run scrcpy --list-camera-sizes for a device serial.",
+        "inputSchema": _schema({"serial": {"type": "string"}}, ["serial"]),
+    },
+    "list_displays": {
+        "description": "Run scrcpy --list-displays for a device serial.",
+        "inputSchema": _schema({"serial": {"type": "string"}}, ["serial"]),
+    },
+    "list_encoders": {
+        "description": "Run scrcpy --list-encoders for a device serial.",
+        "inputSchema": _schema({"serial": {"type": "string"}}, ["serial"]),
+    },
 }
 
 
@@ -270,6 +321,17 @@ class ScrcpyMcpServer:
             "android_start_app": self.service.android_start_app,
             "android_wait": self.service.android_wait,
             "approve_action": self.service.approve_action,
+            "get_scrcpy_version": self.service.get_scrcpy_version,
+            "list_scrcpy_features": self.service.list_scrcpy_features,
+            "list_scrcpy_options": self.service.list_scrcpy_options,
+            "list_scrcpy_shortcuts": self.service.list_scrcpy_shortcuts,
+            "recommend_scrcpy_recipe": self.service.recommend_scrcpy_recipe,
+            "validate_scrcpy_args": self.service.validate_scrcpy_args,
+            "list_apps": self.service.list_apps,
+            "list_cameras": self.service.list_cameras,
+            "list_camera_sizes": self.service.list_camera_sizes,
+            "list_displays": self.service.list_displays,
+            "list_encoders": self.service.list_encoders,
         }
         handler = handlers.get(name)
         if not handler:
@@ -297,6 +359,16 @@ class ScrcpyMcpServer:
             data = self.service.get_last_used()
         elif uri == "scrctrl://agent/capabilities":
             data = self.service.capabilities()
+        elif uri == "scrctrl://scrcpy/version":
+            data = self.service.get_scrcpy_version()
+        elif uri == "scrctrl://scrcpy/features":
+            data = self.service.list_scrcpy_features()
+        elif uri == "scrctrl://scrcpy/options":
+            data = self.service.list_scrcpy_options()
+        elif uri == "scrctrl://scrcpy/shortcuts":
+            data = self.service.list_scrcpy_shortcuts()
+        elif uri == "scrctrl://scrcpy/recipes":
+            data = self.service.list_scrcpy_recipes()
         else:
             return self._error(message_id, -32602, f"Unknown resource: {uri}")
         return self._result(
@@ -343,6 +415,16 @@ class ScrcpyMcpServer:
                 "title": "Agent capabilities",
                 "mimeType": "application/json",
             },
+            {"uri": "scrctrl://scrcpy/version", "name": "scrcpy-version", "title": "scrcpy version", "mimeType": "application/json"},
+            {"uri": "scrctrl://scrcpy/features", "name": "scrcpy-features", "title": "scrcpy features", "mimeType": "application/json"},
+            {"uri": "scrctrl://scrcpy/options", "name": "scrcpy-options", "title": "scrcpy options", "mimeType": "application/json"},
+            {
+                "uri": "scrctrl://scrcpy/shortcuts",
+                "name": "scrcpy-shortcuts",
+                "title": "scrcpy shortcuts",
+                "mimeType": "application/json",
+            },
+            {"uri": "scrctrl://scrcpy/recipes", "name": "scrcpy-recipes", "title": "scrcpy recipes", "mimeType": "application/json"},
         ]
 
     @staticmethod

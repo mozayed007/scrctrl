@@ -66,6 +66,10 @@ AUDIO_SOURCES = [
 RENDER_FITS = ["auto", "stretch", "crop", "letterbox"]
 ORIENTATIONS = ["0", "90", "180", "270", "flip0", "flip90", "flip180", "flip270"]
 RECORD_FORMATS = ["mp4", "mkv", "m4a", "mka", "opus", "aac", "flac", "wav", "raw"]
+KEYBOARD_MODES = ["disabled", "sdk", "uhid", "aoa"]
+MOUSE_MODES = ["disabled", "sdk", "uhid", "aoa"]
+GAMEPAD_MODES = ["disabled", "uhid", "aoa"]
+CAMERA_FACINGS = ["front", "back", "external"]
 ADB_TIMEOUT = 30  # Seconds to wait for ADB commands
 MDNS_TIMEOUT = 10  # Seconds to wait for mDNS discovery
 
@@ -437,6 +441,10 @@ PROFILE_FIELDS: list[ProfileField] = [
         choices=tuple(RENDER_FITS),
         scrcpy_flag="--render-fit",
     ),
+    ProfileField("display_id", "Display ID", "str", section="Display & Window", scrcpy_flag="--display-id"),
+    ProfileField("crop", "Crop", "str", section="Display & Window", scrcpy_flag="--crop"),
+    ProfileField("fullscreen", "Fullscreen", "bool", section="Display & Window", scrcpy_flag="--fullscreen"),
+    ProfileField("always_on_top", "Always on top", "bool", section="Display & Window", scrcpy_flag="--always-on-top"),
     ProfileField(
         "window_aspect_ratio_lock",
         "Lock window aspect ratio",
@@ -454,6 +462,24 @@ PROFILE_FIELDS: list[ProfileField] = [
         choices=tuple(ORIENTATIONS),
         scrcpy_flag="--orientation",
     ),
+    ProfileField(
+        "keyboard",
+        "Keyboard mode",
+        "choice",
+        section="Input",
+        choices=tuple(KEYBOARD_MODES),
+        scrcpy_flag="--keyboard",
+    ),
+    ProfileField("mouse", "Mouse mode", "choice", section="Input", choices=tuple(MOUSE_MODES), scrcpy_flag="--mouse"),
+    ProfileField(
+        "gamepad",
+        "Gamepad mode",
+        "choice",
+        section="Input",
+        choices=tuple(GAMEPAD_MODES),
+        scrcpy_flag="--gamepad",
+    ),
+    ProfileField("shortcut_mod", "Shortcut modifier", "str", section="Input", scrcpy_flag="--shortcut-mod"),
     ProfileField("no_control", "Disable control", "bool", section="Behavior & Control", scrcpy_flag="--no-control"),
     ProfileField(
         "power_off_on_close",
@@ -462,6 +488,10 @@ PROFILE_FIELDS: list[ProfileField] = [
         section="Behavior & Control",
         scrcpy_flag="--power-off-on-close",
     ),
+    ProfileField("turn_screen_off", "Turn screen off", "bool", section="Behavior & Control", scrcpy_flag="--turn-screen-off"),
+    ProfileField("show_touches", "Show touches", "bool", section="Behavior & Control", scrcpy_flag="--show-touches"),
+    ProfileField("no_audio", "Disable audio", "bool", section="Streaming & Codecs", scrcpy_flag="--no-audio"),
+    ProfileField("no_window", "Disable window", "bool", section="Display & Window", scrcpy_flag="--no-window"),
     ProfileField(
         "flex_display",
         "Flex display",
@@ -487,6 +517,19 @@ PROFILE_FIELDS: list[ProfileField] = [
         choices=tuple(RECORD_FORMATS),
         scrcpy_flag="--record-format",
     ),
+    ProfileField("camera_id", "Camera ID", "str", section="Camera", scrcpy_flag="--camera-id"),
+    ProfileField(
+        "camera_facing",
+        "Camera facing",
+        "choice",
+        section="Camera",
+        choices=tuple(CAMERA_FACINGS),
+        scrcpy_flag="--camera-facing",
+    ),
+    ProfileField("camera_size", "Camera size", "str", section="Camera", scrcpy_flag="--camera-size"),
+    ProfileField("camera_fps", "Camera FPS", "str", section="Camera", scrcpy_flag="--camera-fps"),
+    ProfileField("camera_torch", "Camera torch", "bool", section="Camera", scrcpy_flag="--camera-torch"),
+    ProfileField("camera_zoom", "Camera zoom", "str", section="Camera", scrcpy_flag="--camera-zoom"),
 ]
 
 

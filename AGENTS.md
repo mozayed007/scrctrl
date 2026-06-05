@@ -39,18 +39,38 @@ The manager is the single source of truth for all scrcpy argument building.
 - `render_fit` — `auto` | `stretch` | `crop` | `letterbox` | empty
 - `orientation` — `0` | `90` | `180` | `270` | `flip0` | `flip90` | `flip180` | `flip270` | empty
 - `window_aspect_ratio_lock` — `yes` (default) | `no`
+- `keyboard` — `disabled` | `sdk` | `uhid` | `aoa` | empty
+- `mouse` — `disabled` | `sdk` | `uhid` | `aoa` | empty
+- `gamepad` — `disabled` | `uhid` | `aoa` | empty
+- `shortcut_mod` — Shortcut modifier list, e.g. `rctrl` or `lctrl,lsuper`
 
 ### Display & Behavior
 - `keep_active` — `__YES__` / `yes` / `true` / `1` / `on` → `--keep-active`
 - `background_color` — Hex color, e.g. `#234567`
+- `display_id` — Display id → `--display-id=<id>`
+- `crop` — Crop as `WIDTH:HEIGHT:X:Y` → `--crop=<spec>`
+- `fullscreen` — `yes` → `--fullscreen`
+- `always_on_top` — `yes` → `--always-on-top`
 - `flex_display` — `yes` → `--flex-display` (only meaningful with `new_display` or `mode=mirror`)
 - `new_display` — Virtual display spec, e.g. `1920x1080/160` → `--new-display=1920x1080/160`
 - `no_control` — `yes` → `--no-control`
 - `power_off_on_close` — `yes` → `--power-off-on-close`
+- `turn_screen_off` — `yes` → `--turn-screen-off`
+- `show_touches` — `yes` → `--show-touches`
+- `no_audio` — `yes` → `--no-audio`
+- `no_window` — `yes` → `--no-window`
 
 ### Recording
 - `record` — File path → `--record=<path>`
 - `record_format` — `mp4` | `mkv` | `m4a` | `mka` | `opus` | `aac` | `flac` | `wav` | `raw` → `--record-format=<fmt>`
+
+### Camera
+- `camera_id` — Camera id → `--camera-id=<id>`
+- `camera_facing` — `front` | `back` | `external` → `--camera-facing=<facing>`
+- `camera_size` — `WIDTHxHEIGHT` → `--camera-size=<size>`
+- `camera_fps` — Frame rate → `--camera-fps=<fps>`
+- `camera_torch` — `yes` → `--camera-torch`
+- `camera_zoom` — Zoom value → `--camera-zoom=<zoom>`
 
 ### Boolean Normalization
 Profile booleans use `is_profile_bool_yes(value)` which accepts:
@@ -142,7 +162,9 @@ Key logic:
 ## Agent Experience / Android CUA
 
 - `scrcpy_agent.py` is the prompt-free agent service layer; keep it JSON-safe and non-interactive
+- `scrcpy_capabilities.py` is the scrcpy-native knowledge catalog; prefer local `scrcpy --help` compatibility over stale docs
 - `scrcpy_mcp.py` is the local MCP stdio server; keep tool schemas explicit and avoid arbitrary `adb shell`
 - Android CUA sessions require `session_id` for control actions and should use direct ADB screenshots (`exec-out screencap -p`)
+- MCP sessions are in-memory; CLI sessions persist under `%TEMP%\scrctrl-agent\sessions`
 - Risky actions should return `approval_required` or `blocked`, not silently execute
 - Scrcpy remains the watch/recording surface; ADB remains the reliable state/action surface
