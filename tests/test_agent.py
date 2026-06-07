@@ -390,7 +390,12 @@ class AgentCliTests(unittest.TestCase):
             (["agent", "shutdown-adb", "--json"], {"agent_command": "shutdown-adb", "json": True}),
             (
                 ["agent", "launch-profile", "MainPhone", "--quality", "high", "--extra=--no-control", "--json"],
-                {"agent_command": "launch-profile", "profile_name": "MainPhone", "quality": "high", "extra": ["--no-control"]},
+                {
+                    "agent_command": "launch-profile",
+                    "profile_name": "MainPhone",
+                    "quality": "high",
+                    "extra": ["--no-control"],
+                },
             ),
             (
                 ["agent", "quick-launch", "MainPhone", "--foreground", "--json"],
@@ -400,7 +405,10 @@ class AgentCliTests(unittest.TestCase):
                 ["agent", "launch-app", "USB123", "com.example.app", "--mode", "app_only", "--json"],
                 {"agent_command": "launch-app", "serial": "USB123", "package": "com.example.app", "mode": "app_only"},
             ),
-            (["agent", "start-mirror", "USB123", "--json"], {"agent_command": "start-mirror", "profile_or_serial": "USB123"}),
+            (
+                ["agent", "start-mirror", "USB123", "--json"],
+                {"agent_command": "start-mirror", "profile_or_serial": "USB123"},
+            ),
             (
                 ["agent", "screenshot", "session-1", "--include-base64", "--json"],
                 {"agent_command": "screenshot", "session_id": "session-1", "include_base64": True},
